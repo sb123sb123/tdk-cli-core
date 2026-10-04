@@ -22,6 +22,8 @@ tdk project
 tdk projects              # Overview
 
 tdk projects --check      # ✅ CI validation (exit 0/1)
+tdk projects --json       # Versioned JSON report
+tdk projects --json --check # Machine-readable CI validation (exit 0/1)
 ```
 
 **Creates:**

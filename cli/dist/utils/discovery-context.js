@@ -1,5 +1,7 @@
+import chalk from "chalk";
 import { createCacheValidator } from "./cache.js";
-import { discoverResources, discoverStacks, getAllStacks } from "./services.js";
+import { findProjectRoot } from "./paths.js";
+import { discoverResources, discoverResourcesWithProblems, discoverStacks, getAllStacks, } from "./services.js";
 let cachedContext = null;
 const cacheValidator = createCacheValidator(1000);
 export function clearDiscoveryCache() {
@@ -13,9 +15,15 @@ export function createDiscoveryContext(forceRefresh = false) {
     if (!forceRefresh && isCacheValid() && cachedContext) {
         return cachedContext;
     }
-    const resources = discoverResources();
-    const stacks = discoverStacks();
+    const projectRoot = findProjectRoot();
+    const { resources, problems } = projectRoot
+        ? discoverResourcesWithProblems(projectRoot)
+        : { resources: discoverResources(), problems: [] };
+    const stacks = discoverStacks(resources);
     const stackNames = getAllStacks(resources);
+    for (const problem of problems) {
+        console.warn(chalk.yellow(`Warning: skipped ${problem.path}: ${problem.reason}`));
+    }
     const unassignedResources = resources.filter((r) => !r.stack);
     const resourcesByStack = new Map();
     for (const resource of resources) {
@@ -27,6 +35,7 @@ export function createDiscoveryContext(forceRefresh = false) {
     }
     const context = {
         resources,
+        problems,
         stacks,
         stackNames,
         unassignedResources,

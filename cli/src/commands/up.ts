@@ -32,10 +32,9 @@ import { findAvailablePort } from "../utils/port-assignment.js";
 import { isApiServiceType } from "../utils/resource-kind.js";
 import { appendHealthPath, resolveSubdomainBases } from "../utils/service-urls.js";
 import {
-  discoverResources,
+  type discoverResources,
+  discoverResourcesStrict,
   discoverStacks,
-  getResourcesForStack,
-  stackExists,
 } from "../utils/services.js";
 import { buildSmokePlans, formatSmokeFailure, runSmokePlans } from "../utils/smoke.js";
 import { buildTiltUpArgs, runTilt } from "../utils/tilt.js";
@@ -135,6 +134,7 @@ export const upCommand = new Command("up")
       const projectRoot = options.dryRun
         ? requireProjectRoot()
         : (findProjectRoot() ?? process.cwd());
+      const discoveredResources = discoverResourcesStrict();
       const hostPortPlan = await getHostPortPlan(projectRoot, {
         inspectDocker: !options.dryRun,
       });
@@ -172,16 +172,16 @@ export const upCommand = new Command("up")
       let focusServiceNames: string[] = [];
 
       if (stackName) {
-        if (!stackExists(stackName)) {
+        servicesToStart = discoveredResources.filter((resource) => resource.stack === stackName);
+        if (servicesToStart.length === 0) {
           errorFactories.stackNotFound(stackName).exit();
         }
 
-        servicesToStart = getResourcesForStack(stackName);
         focusServiceNames = servicesToStart.map((s) => s.name);
         stackDescription = `stack "${stackName}"`;
       } else {
-        servicesToStart = discoverResources();
-        const allStacks = discoverStacks();
+        servicesToStart = discoveredResources;
+        const allStacks = discoverStacks(discoveredResources);
         stackDescription = `all stacks (${formatCount(allStacks.length, "stack")}, ${formatCount(servicesToStart.length, "service")})`;
       }
 

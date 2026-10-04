@@ -98,6 +98,25 @@ describe("tdk resources and stacks --json", () => {
         ],
       },
     });
+    const stack = parseSingleJsonLine(result.stdout).data.stacks[0];
+    expect(stack.services).toHaveLength(stack.resourceCount);
+    expect(stack).not.toHaveProperty("description");
+  });
+
+  it("fails with a machine error outside a project", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tdk-no-project-"));
+    projectRoots.push(cwd);
+    const result = spawnSync(process.execPath, [cliBin, "stacks", "--json"], {
+      cwd,
+      encoding: "utf-8",
+      env: { ...process.env, NO_COLOR: "1" },
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("Could not find project root");
+    const envelope = parseSingleJsonLine(result.stdout);
+    expect(envelope.data).toBeNull();
+    expect(envelope.errors).toHaveLength(1);
   });
 
   it("includes descriptions when --verbose is combined with --json", () => {

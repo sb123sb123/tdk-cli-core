@@ -4,6 +4,7 @@ import { createDiscoveryContext } from "../utils/discovery-context.js";
 import { runCommand } from "../utils/errors.js";
 import { formatCount, showDetail, showEmptyState, showStep } from "../utils/formatting.js";
 import { createMachineEnvelope, writeMachineError } from "../utils/machine-output.js";
+import { findProjectRoot } from "../utils/paths.js";
 export const stacksCommand = new Command("stacks")
     .description("List all stacks and their resources")
     .alias("ls") // Keep 'tdk ls' as shorthand
@@ -12,13 +13,16 @@ export const stacksCommand = new Command("stacks")
     .option("--json", "Output a versioned JSON stack report", false)
     .action(async (options) => {
     const action = async () => {
+        if (options.json && !findProjectRoot()) {
+            writeMachineError(new Error("Could not find project root (no .tdk/project.json found)"));
+        }
         const discovery = createDiscoveryContext();
         const verbose = options.verbose || stacksCommand.parent?.opts().verbose === true;
         if (options.json) {
             const stacks = discovery.stacks.map((stack) => ({
                 name: stack.name,
                 resourceCount: stack.resourceCount,
-                ...(verbose || options.services ? { description: stack.description } : {}),
+                ...(verbose ? { description: stack.description } : {}),
                 ...(options.services ? { services: stack.resources.map((service) => service.name) } : {}),
             }));
             console.log(JSON.stringify(createMachineEnvelope({ stacks })));

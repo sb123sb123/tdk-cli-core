@@ -5,6 +5,7 @@ export declare function discoverResourcesWithProblems(projectRoot: string): {
     resources: DiscoveredResource[];
     problems: DiscoveryProblem[];
 };
+export declare function warnAboutSkippedFiles(problems: DiscoveryProblem[]): void;
 export declare function discoverResourcesFromRoot(projectRoot: string): DiscoveredResource[];
 export declare function discoverResources(): DiscoveredResource[];
 export declare function discoverResourcesStrict(): DiscoveredResource[];

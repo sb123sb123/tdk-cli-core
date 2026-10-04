@@ -116,8 +116,19 @@ export function discoverResourcesWithProblems(projectRoot) {
     }
     return { resources, problems };
 }
+export function warnAboutSkippedFiles(problems) {
+    for (const problem of problems) {
+        const warning = `skipped ${problem.path}: ${problem.reason}`;
+        if (printedWarnings.has(warning))
+            continue;
+        printedWarnings.add(warning);
+        console.warn(`⚠️  ${warning}`);
+    }
+}
 export function discoverResourcesFromRoot(projectRoot) {
-    return discoverResourcesWithProblems(projectRoot).resources;
+    const { resources, problems } = discoverResourcesWithProblems(projectRoot);
+    warnAboutSkippedFiles(problems);
+    return resources;
 }
 export function discoverResources() {
     const projectRoot = findProjectRoot();

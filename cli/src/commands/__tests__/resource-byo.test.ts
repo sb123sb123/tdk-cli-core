@@ -16,7 +16,7 @@ import { resourcesCommand } from "../../commands/resources.js";
 import { statusCommand } from "../../commands/status.js";
 import { upCommand } from "../../commands/up.js";
 import { clearDiscoveryCache } from "../../utils/discovery-context.js";
-import { discoverResourcesFromRoot } from "../../utils/services.js";
+import { discoverResourcesFromRoot, resetPrintedServiceWarnings } from "../../utils/services.js";
 
 const originalCwd = process.cwd();
 
@@ -281,6 +281,7 @@ describe("bring-your-own resource type", () => {
       expect(warnings.join("\n")).toContain("invalid JSON");
 
       clearDiscoveryCache();
+      resetPrintedServiceWarnings();
       output.length = 0;
       warnings.length = 0;
       await statusCommand.parseAsync(["node", "tdk", "--json"], { from: "node" });

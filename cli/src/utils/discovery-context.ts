@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import type { DiscoveredResource, DiscoveryContext } from "../types/index.js";
 import { createCacheValidator } from "./cache.js";
 import { findProjectRoot } from "./paths.js";
@@ -7,6 +6,7 @@ import {
   discoverResourcesWithProblems,
   discoverStacks,
   getAllStacks,
+  warnAboutSkippedFiles,
 } from "./services.js";
 
 let cachedContext: DiscoveryContext | null = null;
@@ -33,9 +33,7 @@ export function createDiscoveryContext(forceRefresh = false): DiscoveryContext {
   const stacks = discoverStacks(resources);
   const stackNames = getAllStacks(resources);
 
-  for (const problem of problems) {
-    console.warn(chalk.yellow(`Warning: skipped ${problem.path}: ${problem.reason}`));
-  }
+  warnAboutSkippedFiles(problems);
 
   const unassignedResources = resources.filter((r) => !r.stack);
 

@@ -149,8 +149,19 @@ export function discoverResourcesWithProblems(projectRoot: string): {
   return { resources, problems };
 }
 
+export function warnAboutSkippedFiles(problems: DiscoveryProblem[]): void {
+  for (const problem of problems) {
+    const warning = `skipped ${problem.path}: ${problem.reason}`;
+    if (printedWarnings.has(warning)) continue;
+    printedWarnings.add(warning);
+    console.warn(`⚠️  ${warning}`);
+  }
+}
+
 export function discoverResourcesFromRoot(projectRoot: string): DiscoveredResource[] {
-  return discoverResourcesWithProblems(projectRoot).resources;
+  const { resources, problems } = discoverResourcesWithProblems(projectRoot);
+  warnAboutSkippedFiles(problems);
+  return resources;
 }
 
 export function discoverResources(): DiscoveredResource[] {

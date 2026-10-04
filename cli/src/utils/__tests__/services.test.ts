@@ -643,7 +643,26 @@ describe("resilient service discovery", () => {
     expect(context.resources).toEqual([]);
     expect(context.problems).toEqual([expect.objectContaining({ path })]);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining(path));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Warning"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("skipped"));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("invalid JSON"));
+  });
+
+  it("warns once per skipped file even when the context is refreshed", async () => {
+    writeService("bad-json", "{ not json");
+    resetPrintedServiceWarnings();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { clearDiscoveryCache, createDiscoveryContext } = await import("../discovery-context.js");
+    clearDiscoveryCache();
+    createDiscoveryContext(true);
+    createDiscoveryContext(true);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("warns about skipped files for non-strict callers such as doctor", () => {
+    const path = writeService("bad-json", "{ not json");
+    resetPrintedServiceWarnings();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(discoverResourcesFromRoot(root)).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(path));
   });
 });

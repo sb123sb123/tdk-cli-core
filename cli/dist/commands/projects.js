@@ -4,7 +4,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { MASTER_CONFIG_FILES } from "../utils/constants.js";
 import { createDiscoveryContext } from "../utils/discovery-context.js";
-import { requireProjectRoot, runCommand } from "../utils/errors.js";
+import { errorFactories, requireProjectRoot, runCommand } from "../utils/errors.js";
 import { formatCount } from "../utils/formatting.js";
 import { createMachineEnvelope, writeMachineError } from "../utils/machine-output.js";
 import { findProjectRoot } from "../utils/paths.js";
@@ -17,11 +17,11 @@ export const projectsCommand = new Command("projects")
     const action = async () => {
         const projectRoot = options.json ? findProjectRoot() : requireProjectRoot();
         if (!projectRoot) {
-            throw new Error("Could not find project root (no .tdk/project.json found)");
+            throw errorFactories.notInProject();
         }
+        const outDir = join(projectRoot, ".tdk", ".tdk-out");
+        const missing = MASTER_CONFIG_FILES.filter((file) => !existsSync(join(outDir, file)));
         if (options.json) {
-            const outDir = join(projectRoot, ".tdk", ".tdk-out");
-            const missing = MASTER_CONFIG_FILES.filter((file) => !existsSync(join(outDir, file)));
             const discovery = createDiscoveryContext();
             console.log(JSON.stringify(createMachineEnvelope({
                 projectRoot,
@@ -40,8 +40,6 @@ export const projectsCommand = new Command("projects")
         console.log(chalk.bold("Project Root:"));
         console.log(chalk.gray(`  ${projectRoot}`));
         console.log();
-        const outDir = join(projectRoot, ".tdk", ".tdk-out");
-        const missing = MASTER_CONFIG_FILES.filter((file) => !existsSync(join(outDir, file)));
         console.log(chalk.bold("Master Configuration:"));
         if (missing.length === 0) {
             for (const file of MASTER_CONFIG_FILES) {

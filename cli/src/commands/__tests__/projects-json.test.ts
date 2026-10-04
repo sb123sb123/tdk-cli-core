@@ -9,8 +9,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const cliPath = path.join(repoRoot, "cli", "bin", "tdk.js");
 const masterConfigFiles = ["TILT_TECH_STACK.star", "TILT_RESOURCE_DEFAULTS.star", "spec.master"];
 
-function createProject(configured: boolean): string {
-  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tdk-projects-json-"));
+function createProject(configured: boolean | string[]): string {
+  const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tdk-projects-json-")));
   fs.mkdirSync(path.join(projectRoot, ".tdk"), { recursive: true });
   fs.writeFileSync(path.join(projectRoot, ".tdk", "project.json"), "{}\n");
 
@@ -28,7 +28,7 @@ function createProject(configured: boolean): string {
   if (configured) {
     const outDir = path.join(projectRoot, ".tdk", ".tdk-out");
     fs.mkdirSync(outDir, { recursive: true });
-    for (const file of masterConfigFiles) {
+    for (const file of configured === true ? masterConfigFiles : configured) {
       fs.writeFileSync(path.join(outDir, file), "");
     }
   }
@@ -58,7 +58,9 @@ describe("tdk projects --json", () => {
   it("prints the project report without --check and returns 1 for missing config with --check", () => {
     const projectRoot = createProject(false);
     try {
-      const report = parseReport(runProjects(projectRoot, false));
+      const plain = runProjects(projectRoot, false);
+      expect(plain.status).toBe(0);
+      const report = parseReport(plain);
       expect(report).toMatchObject({
         schemaVersion: 1,
         data: {
@@ -99,6 +101,37 @@ describe("tdk projects --json", () => {
       });
     } finally {
       fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("lists only the missing master files when the project is partially configured", () => {
+    const projectRoot = createProject(["TILT_TECH_STACK.star", "spec.master"]);
+    try {
+      const result = runProjects(projectRoot, true);
+      expect(result.status).toBe(1);
+      expect(parseReport(result)).toMatchObject({
+        data: { configured: false, missingFiles: ["TILT_RESOURCE_DEFAULTS.star"] },
+        errors: [],
+      });
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a machine error with exit 1 when no project root exists", () => {
+    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "tdk-projects-json-empty-"));
+    try {
+      for (const check of [false, true]) {
+        const result = runProjects(emptyDir, check);
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain("Could not find project root");
+        expect(result.stdout).not.toContain("\u001b[");
+        const body = JSON.parse(result.stdout);
+        expect(body.data).toBeNull();
+        expect(body.errors[0].code).toBe("COMMAND_FAILED");
+      }
+    } finally {
+      fs.rmSync(emptyDir, { recursive: true, force: true });
     }
   });
 });

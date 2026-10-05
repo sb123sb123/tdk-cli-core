@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { errorFactories } from "../errors.js";
+import { toMachineError } from "../machine-output.js";
 
 describe("not-found error suggestions", () => {
   it("suggests a close stack name while retaining existing guidance", () => {
@@ -31,5 +32,23 @@ describe("not-found error suggestions", () => {
       "Run `tdk stacks` to see available stacks",
       "Run `tdk stack` to assign resources to a stack",
     ]);
+  });
+
+  it("uses the same suggestion format for unknown services", () => {
+    const error = errorFactories.unknownServices(["widgt"], ["widget"]);
+
+    expect(error.message).toBe("Unknown service widgt. Valid names: widget");
+    expect(error.exitCode).toBe(2);
+    expect(error.suggestions).toEqual(['Did you mean "widget"?']);
+  });
+
+  it("preserves suggestions in machine-readable errors", () => {
+    const error = errorFactories.stackNotFound("shp", ["shop"]);
+
+    expect(toMachineError(error).error).toMatchObject({
+      code: "COMMAND_FAILED",
+      message: 'Stack "shp" not found',
+      suggestions: expect.arrayContaining(['Did you mean "shop"?']),
+    });
   });
 });

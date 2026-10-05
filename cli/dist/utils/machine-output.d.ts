@@ -1,6 +1,7 @@
 export interface MachineError {
     code: string;
     message: string;
+    suggestions?: string[];
 }
 export interface MachineEnvelope<T> {
     schemaVersion: 1;

@@ -31,6 +31,15 @@ export class TdkError extends Error {
         process.exit(this.exitCode);
     }
 }
+function closestNameSuggestions(names, candidates) {
+    const suggestions = new Set();
+    for (const name of names) {
+        const closest = suggestClosest(name, candidates);
+        if (closest)
+            suggestions.add(`Did you mean "${closest}"?`);
+    }
+    return [...suggestions];
+}
 export const errorFactories = {
     tiltNotInstalled: () => new TdkError("Tilt CLI is not installed", [
         "Install Tilt: `brew install tilt` (macOS)",
@@ -48,22 +57,17 @@ export const errorFactories = {
         "Quit and reopen Docker Desktop, or run `colima restart`",
         "Then verify with: `docker ps`",
     ]),
-    stackNotFound: (name, stackNames = []) => {
-        const closest = suggestClosest(name, stackNames);
-        return new TdkError(`Stack "${name}" not found`, [
-            ...(closest ? [`Did you mean "${closest}"?`] : []),
-            "Run `tdk stacks` to see available stacks",
-            "Run `tdk stack` to assign resources to a stack",
-        ]);
-    },
-    resourceNotFound: (name, resourceNames = []) => {
-        const closest = suggestClosest(name, resourceNames);
-        return new TdkError(`Resource "${name}" not found`, [
-            ...(closest ? [`Did you mean "${closest}"?`] : []),
-            "Run `tdk resources` to list all resources",
-            "Check the resource name spelling",
-        ]);
-    },
+    stackNotFound: (name, stackNames = []) => new TdkError(`Stack "${name}" not found`, [
+        ...closestNameSuggestions([name], stackNames),
+        "Run `tdk stacks` to see available stacks",
+        "Run `tdk stack` to assign resources to a stack",
+    ]),
+    resourceNotFound: (name, resourceNames = []) => new TdkError(`Resource "${name}" not found`, [
+        ...closestNameSuggestions([name], resourceNames),
+        "Run `tdk resources` to list all resources",
+        "Check the resource name spelling",
+    ]),
+    unknownServices: (names, validNames) => new TdkError(`Unknown service ${names.join(", ")}. Valid names: ${validNames.join(", ")}`, closestNameSuggestions(names, validNames), 2),
     directoryExists: (path) => new TdkError(`Directory already exists: ${path}`, [
         "Use `--path` to specify a different location",
         "Remove the existing directory if no longer needed",

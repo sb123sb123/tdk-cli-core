@@ -38,6 +38,15 @@ export class TdkError extends Error {
   }
 }
 
+function closestNameSuggestions(names: readonly string[], candidates: readonly string[]): string[] {
+  const suggestions = new Set<string>();
+  for (const name of names) {
+    const closest = suggestClosest(name, candidates);
+    if (closest) suggestions.add(`Did you mean "${closest}"?`);
+  }
+  return [...suggestions];
+}
+
 export const errorFactories = {
   tiltNotInstalled: () =>
     new TdkError("Tilt CLI is not installed", [
@@ -58,22 +67,24 @@ export const errorFactories = {
       "Quit and reopen Docker Desktop, or run `colima restart`",
       "Then verify with: `docker ps`",
     ]),
-  stackNotFound: (name: string, stackNames: readonly string[] = []) => {
-    const closest = suggestClosest(name, stackNames);
-    return new TdkError(`Stack "${name}" not found`, [
-      ...(closest ? [`Did you mean "${closest}"?`] : []),
+  stackNotFound: (name: string, stackNames: readonly string[] = []) =>
+    new TdkError(`Stack "${name}" not found`, [
+      ...closestNameSuggestions([name], stackNames),
       "Run `tdk stacks` to see available stacks",
       "Run `tdk stack` to assign resources to a stack",
-    ]);
-  },
-  resourceNotFound: (name: string, resourceNames: readonly string[] = []) => {
-    const closest = suggestClosest(name, resourceNames);
-    return new TdkError(`Resource "${name}" not found`, [
-      ...(closest ? [`Did you mean "${closest}"?`] : []),
+    ]),
+  resourceNotFound: (name: string, resourceNames: readonly string[] = []) =>
+    new TdkError(`Resource "${name}" not found`, [
+      ...closestNameSuggestions([name], resourceNames),
       "Run `tdk resources` to list all resources",
       "Check the resource name spelling",
-    ]);
-  },
+    ]),
+  unknownServices: (names: readonly string[], validNames: readonly string[]) =>
+    new TdkError(
+      `Unknown service ${names.join(", ")}. Valid names: ${validNames.join(", ")}`,
+      closestNameSuggestions(names, validNames),
+      2,
+    ),
   directoryExists: (path: string) =>
     new TdkError(`Directory already exists: ${path}`, [
       "Use `--path` to specify a different location",

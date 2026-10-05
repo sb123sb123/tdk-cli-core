@@ -3,6 +3,7 @@ import { TdkError } from "./errors.js";
 export interface MachineError {
   code: string;
   message: string;
+  suggestions?: string[];
 }
 
 export interface MachineEnvelope<T> {
@@ -20,7 +21,14 @@ export function createMachineEnvelope<T>(
 
 export function toMachineError(error: unknown): { error: MachineError; exitCode: 1 | 2 } {
   if (error instanceof TdkError) {
-    return { error: { code: "COMMAND_FAILED", message: error.message }, exitCode: 1 };
+    return {
+      error: {
+        code: "COMMAND_FAILED",
+        message: error.message,
+        ...(error.suggestions.length > 0 ? { suggestions: error.suggestions } : {}),
+      },
+      exitCode: 1,
+    };
   }
   return {
     error: {

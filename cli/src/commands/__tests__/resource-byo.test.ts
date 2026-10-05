@@ -16,6 +16,10 @@ import { resourcesCommand } from "../../commands/resources.js";
 import { statusCommand } from "../../commands/status.js";
 import { upCommand } from "../../commands/up.js";
 import { VALID_RESOURCE_TYPES } from "../../utils/constants.js";
+
+const jsonOutput = vi.hoisted(() => ({ createJsonEmitter: vi.fn() }));
+vi.mock("../../utils/json-output.js", () => ({ ...jsonOutput }));
+
 import { clearDiscoveryCache } from "../../utils/discovery-context.js";
 import { discoverResourcesFromRoot, resetPrintedServiceWarnings } from "../../utils/services.js";
 
@@ -281,7 +285,7 @@ describe("bring-your-own resource type", () => {
         .parseAsync(["node", "tdk", "--only", "widgt", "--dry-run"], { from: "node" })
         .catch(() => {});
       expect(exit).toHaveBeenCalledWith(2);
-      expect(errors.join("\n")).toContain('Did you mean "widget" for "widgt"?');
+      expect(errors.join("\n")).toContain('Did you mean "widget"?');
     } finally {
       error.mockRestore();
       exit.mockRestore();
@@ -328,6 +332,88 @@ describe("bring-your-own resource type", () => {
       clearDiscoveryCache();
     }
   });
+  it("emits service suggestions separately in --only JSON errors", async () => {
+    await createByo();
+    const originalAllowNativeWindows = process.env.TDK_ALLOW_NATIVE_WINDOWS;
+    process.env.TDK_ALLOW_NATIVE_WINDOWS = "1";
+    const emitted: Array<{ data: Record<string, unknown>; errors?: unknown[] }> = [];
+    const emit = (data: Record<string, unknown>, errors?: unknown[]) => {
+      emitted.push({ data, errors });
+    };
+    jsonOutput.createJsonEmitter.mockReturnValue(emit as never);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit");
+    }) as never);
+
+    try {
+      await upCommand
+        .parseAsync(["node", "tdk", "--only", "widgt", "--dry-run", "--json"], { from: "node" })
+        .catch(() => {});
+      expect(emitted).toEqual([
+        {
+          data: { ok: false },
+          errors: [
+            {
+              code: "UNKNOWN_SERVICE",
+              message: "Unknown service widgt. Valid names: widget",
+              suggestions: ['Did you mean "widget"?'],
+            },
+          ],
+        },
+      ]);
+    } finally {
+      error.mockRestore();
+      exit.mockRestore();
+      jsonOutput.createJsonEmitter.mockReset();
+      if (originalAllowNativeWindows === undefined) delete process.env.TDK_ALLOW_NATIVE_WINDOWS;
+      else process.env.TDK_ALLOW_NATIVE_WINDOWS = originalAllowNativeWindows;
+      clearDiscoveryCache();
+    }
+  });
+
+  it("emits stack suggestions in JSON errors from resources and networks", async () => {
+    await createByo();
+    const output: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...parts: unknown[]) => {
+      output.push(parts.map(String).join(" "));
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit");
+    }) as never);
+
+    try {
+      for (const command of [resourcesCommand, networksCommand]) {
+        output.length = 0;
+        exit.mockClear();
+        clearDiscoveryCache();
+        await command
+          .parseAsync(["node", "tdk", "--stack", "shp", "--json"], { from: "node" })
+          .catch(() => {});
+        expect(exit).toHaveBeenCalledWith(1);
+        const report = output
+          .map(
+            (line) =>
+              JSON.parse(line) as {
+                errors: Array<{ code: string; message: string; suggestions?: string[] }>;
+              },
+          )
+          .find((entry) => entry.errors[0]?.code === "COMMAND_FAILED");
+        expect(report?.errors[0]).toMatchObject({
+          code: "COMMAND_FAILED",
+          message: 'Stack "shp" not found',
+          suggestions: expect.arrayContaining(['Did you mean "shop"?']),
+        });
+      }
+    } finally {
+      log.mockRestore();
+      error.mockRestore();
+      exit.mockRestore();
+      clearDiscoveryCache();
+    }
+  });
+
   it("keeps --dry-run side-effect free even when --force is also set", async () => {
     await createByo();
     const before = snapshotTree(tempDir);

@@ -18,7 +18,6 @@ import { isApiServiceType } from "../utils/resource-kind.js";
 import { appendHealthPath, resolveSubdomainBases } from "../utils/service-urls.js";
 import { discoverResources, discoverResourcesStrict, discoverStacks, stackExists, } from "../utils/services.js";
 import { buildSmokePlans, formatSmokeFailure, runSmokePlans } from "../utils/smoke.js";
-import { suggestClosest } from "../utils/suggestions.js";
 import { evaluateTdkVersionFloor } from "../utils/tdk-version.js";
 import { buildTiltUpArgs, runTilt } from "../utils/tilt.js";
 import { stopTiltOnPort } from "../utils/tilt-process.js";
@@ -196,15 +195,15 @@ export const upCommand = new Command("up")
             const unknown = findUnknownServices(options.only, candidates);
             if (unknown.length > 0) {
                 const validNames = candidates.map((service) => service.name);
-                const suggestions = unknown
-                    .map((name) => {
-                    const closest = suggestClosest(name, validNames);
-                    return closest ? `Did you mean "${closest}" for "${name}"?` : undefined;
-                })
-                    .filter((suggestion) => suggestion !== undefined);
-                const message = `Unknown service ${unknown.join(", ")}. Valid names: ${validNames.join(", ")}${suggestions.length > 0 ? `\n${suggestions.join("\n")}` : ""}`;
-                emit?.({ ok: false }, [{ code: "UNKNOWN_SERVICE", message }]);
-                showErrorAndExit(message, 2);
+                const error = errorFactories.unknownServices(unknown, validNames);
+                emit?.({ ok: false }, [
+                    {
+                        code: "UNKNOWN_SERVICE",
+                        message: error.message,
+                        ...(error.suggestions.length > 0 ? { suggestions: error.suggestions } : {}),
+                    },
+                ]);
+                error.exit();
             }
         }
         // Also under --dry-run: the check only reads, and a dry run should show what a real run would refuse.

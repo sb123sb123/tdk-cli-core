@@ -14,6 +14,7 @@ export declare const errorFactories: {
     dockerNotResponding: () => TdkError;
     stackNotFound: (name: string, stackNames?: readonly string[]) => TdkError;
     resourceNotFound: (name: string, resourceNames?: readonly string[]) => TdkError;
+    unknownServices: (names: readonly string[], validNames: readonly string[]) => TdkError;
     directoryExists: (path: string) => TdkError;
     invalidPath: (path: string) => TdkError;
     notInProject: () => TdkError;

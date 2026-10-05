@@ -17,11 +17,29 @@ function levenshteinDistance(left: string, right: string): number {
   return previousRow[right.length];
 }
 
+function isAdjacentTransposition(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length - 1; index++) {
+    if (
+      left[index] !== right[index] &&
+      left[index] === right[index + 1] &&
+      left[index + 1] === right[index] &&
+      left.slice(0, index) === right.slice(0, index) &&
+      left.slice(index + 2) === right.slice(index + 2)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
- * Returns the closest candidate when it is within a conservative typo threshold.
+ * Bases the threshold on the longer name and caps it at two edits.
+ * An adjacent transposition counts as one typo; ties use deterministic code-unit order.
  */
 export function suggestClosest(input: string, candidates: readonly string[]): string | undefined {
-  if (input.length === 0 || candidates.length === 0) return undefined;
+  if (input.length < 2 || candidates.length === 0) return undefined;
+  // stackExists and findUnknownServices are case-sensitive, so case-only mismatches need the canonical spelling.
   if (candidates.includes(input)) return undefined;
 
   const normalizedInput = input.toLowerCase();
@@ -30,7 +48,16 @@ export function suggestClosest(input: string, candidates: readonly string[]): st
 
   for (const candidate of candidates) {
     if (candidate.length === 0) continue;
-    const distance = levenshteinDistance(normalizedInput, candidate.toLowerCase());
+    const normalizedCandidate = candidate.toLowerCase();
+    const distance = isAdjacentTransposition(normalizedInput, normalizedCandidate)
+      ? 1
+      : levenshteinDistance(normalizedInput, normalizedCandidate);
+    const threshold = Math.max(
+      1,
+      Math.min(2, Math.floor(Math.max(normalizedInput.length, normalizedCandidate.length) / 3)),
+    );
+    if (distance > threshold) continue;
+
     if (
       distance < closestDistance ||
       (distance === closestDistance && (closest === undefined || candidate < closest))
@@ -40,6 +67,5 @@ export function suggestClosest(input: string, candidates: readonly string[]): st
     }
   }
 
-  const threshold = Math.max(2, Math.floor(input.length / 3));
-  return closestDistance <= threshold ? closest : undefined;
+  return closest;
 }

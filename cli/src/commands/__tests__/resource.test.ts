@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -574,5 +575,127 @@ describe("parseResourceType", () => {
       /Unknown resource type "bogus"\. Supported types: backend, frontend/,
     );
     expect(() => parseResourceType("")).toThrow(/Unknown resource type/);
+  });
+});
+
+const resourceCliPath = join(dirname(fileURLToPath(import.meta.url)), "../../../bin/tdk.js");
+
+function createResourceProject(): string {
+  const projectRoot = mkdtempSync(join(tmpdir(), "tdk-resource-cli-"));
+  mkdirSync(join(projectRoot, ".tdk"), { recursive: true });
+  writeFileSync(join(projectRoot, ".tdk", "project.json"), "{}\n");
+  return projectRoot;
+}
+
+function runResourceCli(projectRoot: string, args: string[]) {
+  return spawnSync(process.execPath, [resourceCliPath, "resource", ...args], {
+    cwd: projectRoot,
+    input: "",
+    encoding: "utf8",
+  });
+}
+
+describe("resource command non-interactive mode", () => {
+  it("explains how to run when stdin is not a TTY and --yes is missing", () => {
+    const projectRoot = createResourceProject();
+    try {
+      const result = runResourceCli(projectRoot, ["api", "--type", "backend"]);
+      const output = result.stdout + result.stderr;
+
+      expect(result.status).toBe(1);
+      expect(output).toContain("--yes");
+      expect(existsSync(join(projectRoot, "services", "main", "api", "service.json"))).toBe(false);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("requires a resource name with --yes instead of prompting", () => {
+    const projectRoot = createResourceProject();
+    try {
+      const result = runResourceCli(projectRoot, ["--type", "backend", "--yes"]);
+      const output = result.stdout + result.stderr;
+
+      expect(result.status).toBe(1);
+      expect(output).toContain("resource name is required");
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the default frontend framework with --yes instead of prompting", () => {
+    const projectRoot = createResourceProject();
+    try {
+      const result = runResourceCli(projectRoot, ["web", "--type", "frontend", "--yes"]);
+      const manifestPath = join(projectRoot, "services", "main", "web", "service.json");
+
+      expect(result.status).toBe(0);
+      expect(existsSync(manifestPath)).toBe(true);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the default main stack and creates a named resource with --yes", () => {
+    const projectRoot = createResourceProject();
+    try {
+      const result = runResourceCli(projectRoot, ["api", "--type", "backend", "--yes"]);
+      const manifestPath = join(projectRoot, "services", "main", "api", "service.json");
+
+      expect(result.status).toBe(0);
+      expect(existsSync(manifestPath)).toBe(true);
+      expect(JSON.parse(readFileSync(manifestPath, "utf8")).stack).toBe("main");
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses the only existing stack with --yes", () => {
+    const projectRoot = createResourceProject();
+    try {
+      const existingDir = join(projectRoot, "services", "team", "existing");
+      mkdirSync(existingDir, { recursive: true });
+      writeFileSync(
+        join(existingDir, "service.json"),
+        JSON.stringify(createServiceJson("existing-team", "backend", "team", 4100)),
+      );
+
+      const result = runResourceCli(projectRoot, ["new-api", "--type", "backend", "--yes"]);
+      const manifestPath = join(projectRoot, "services", "team", "new-api", "service.json");
+
+      expect(result.status).toBe(0);
+      expect(existsSync(manifestPath)).toBe(true);
+      expect(JSON.parse(readFileSync(manifestPath, "utf8")).stack).toBe("team");
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("requires --stack rather than guessing when --yes finds multiple stacks", () => {
+    const projectRoot = createResourceProject();
+    try {
+      for (const [index, stack] of ["alpha", "beta"].entries()) {
+        const resourceDir = join(projectRoot, "services", stack, "existing");
+        mkdirSync(resourceDir, { recursive: true });
+        writeFileSync(
+          join(resourceDir, "service.json"),
+          JSON.stringify(createServiceJson(`existing-${stack}`, "backend", stack, 4100 + index)),
+        );
+      }
+
+      const result = runResourceCli(projectRoot, ["new-api", "--type", "backend", "--yes"]);
+      const output = result.stdout + result.stderr;
+
+      expect(result.status).toBe(1);
+      expect(output).toContain("--stack");
+      expect(existsSync(join(projectRoot, "services", "alpha", "new-api", "service.json"))).toBe(
+        false,
+      );
+      expect(existsSync(join(projectRoot, "services", "beta", "new-api", "service.json"))).toBe(
+        false,
+      );
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });

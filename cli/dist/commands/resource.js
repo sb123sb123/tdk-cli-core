@@ -365,11 +365,6 @@ export const resourceCommand = new Command("resource")
     }
     await runCommand(async () => {
         const projectRoot = requireProjectRoot();
-        if (!process.stdin.isTTY && !options.yes) {
-            throw new TdkError("Creating a resource without a terminal requires --yes.", [
-                "Pass --yes to use defaults, or run the command in a terminal.",
-            ]);
-        }
         // Support --resource-path as alias for --path
         const resourcePath = options.resourcePath || options.path;
         showCommandHeader("Resource Creation");

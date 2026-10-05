@@ -587,24 +587,40 @@ function createResourceProject(): string {
   return projectRoot;
 }
 
-function runResourceCli(projectRoot: string, args: string[]) {
+function runResourceCli(projectRoot: string, args: string[], input = "") {
   return spawnSync(process.execPath, [resourceCliPath, "resource", ...args], {
     cwd: projectRoot,
-    input: "",
+    input,
     encoding: "utf8",
   });
 }
 
 describe("resource command non-interactive mode", () => {
-  it("explains how to run when stdin is not a TTY and --yes is missing", () => {
+  it("does not create a resource when a prompt receives no input", () => {
     const projectRoot = createResourceProject();
     try {
       const result = runResourceCli(projectRoot, ["api", "--type", "backend"]);
-      const output = result.stdout + result.stderr;
 
       expect(result.status).toBe(1);
-      expect(output).toContain("--yes");
       expect(existsSync(join(projectRoot, "services", "main", "api", "service.json"))).toBe(false);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts confirmation input piped through stdin without --yes", () => {
+    const projectRoot = createResourceProject();
+    try {
+      const result = runResourceCli(
+        projectRoot,
+        ["api", "--type", "backend", "--stack", "shop"],
+        "y\n",
+      );
+      const manifestPath = join(projectRoot, "services", "shop", "api", "service.json");
+
+      expect(result.status).toBe(0);
+      expect(existsSync(manifestPath)).toBe(true);
+      expect(JSON.parse(readFileSync(manifestPath, "utf8")).stack).toBe("shop");
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }

@@ -92,8 +92,7 @@ tdk resource my-api --type backend --stack api --yes
 
 `--yes` skips resource creation prompts and requires an explicit resource name. A new project uses the
 `main` stack, an existing single-stack project reuses that stack, and a project with multiple stacks
-must pass `--stack`. Without `--yes`, a non-interactive invocation exits with a hint instead of
-waiting for input.
+must pass `--stack`. Without `--yes`, prompt answers can still be supplied on stdin for scripted use.
 
 **Creates:**
 - 📄 `service.json` — Auto-assigned port from master config

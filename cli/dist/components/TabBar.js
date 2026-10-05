@@ -3,9 +3,8 @@ import { Box, Text } from "ink";
 const TABS = [
     { id: "overview", label: "OVERVIEW", shortcut: "1" },
     { id: "resources", label: "RESOURCES", shortcut: "2" },
-    { id: "events", label: "EVENTS", shortcut: "3" },
-    { id: "files", label: "FILES", shortcut: "4" },
-    { id: "config", label: "CONFIG", shortcut: "5" },
+    { id: "files", label: "FILES", shortcut: "3" },
+    { id: "config", label: "CONFIG", shortcut: "4" },
 ];
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
 export const TabBar = ({ activeTab, onTabChange, compact = false }) => {

@@ -264,7 +264,34 @@ describe("bring-your-own resource type", () => {
     }
   });
 
-  it("fails missing stack filters in text commands", async () => {
+  it("suggests a close service name for --only", async () => {
+    await createByo();
+    const originalAllowNativeWindows = process.env.TDK_ALLOW_NATIVE_WINDOWS;
+    process.env.TDK_ALLOW_NATIVE_WINDOWS = "1";
+    const errors: string[] = [];
+    const error = vi.spyOn(console, "error").mockImplementation((...parts: unknown[]) => {
+      errors.push(parts.map(String).join(" "));
+    });
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit");
+    }) as never);
+
+    try {
+      await upCommand
+        .parseAsync(["node", "tdk", "--only", "widgt", "--dry-run"], { from: "node" })
+        .catch(() => {});
+      expect(exit).toHaveBeenCalledWith(2);
+      expect(errors.join("\n")).toContain('Did you mean "widget" for "widgt"?');
+    } finally {
+      error.mockRestore();
+      exit.mockRestore();
+      if (originalAllowNativeWindows === undefined) delete process.env.TDK_ALLOW_NATIVE_WINDOWS;
+      else process.env.TDK_ALLOW_NATIVE_WINDOWS = originalAllowNativeWindows;
+      clearDiscoveryCache();
+    }
+  });
+
+  it("suggests close stack names for text filters", async () => {
     await createByo();
     const output: string[] = [];
     const errors: string[] = [];
@@ -285,13 +312,14 @@ describe("bring-your-own resource type", () => {
         exit.mockClear();
         clearDiscoveryCache();
         await command
-          .parseAsync(["node", "tdk", "--stack", "missing"], { from: "node" })
+          .parseAsync(["node", "tdk", "--stack", "shp"], { from: "node" })
           .catch(() => {});
 
         expect(exit).toHaveBeenCalledWith(1);
         const combined = [...output, ...errors].join("\n");
-        expect(combined).toContain('Stack "missing" not found');
+        expect(combined).toContain('Stack "shp" not found');
         expect(combined).toContain("tdk stacks");
+        expect(combined).toContain('Did you mean "shop"?');
       }
     } finally {
       log.mockRestore();

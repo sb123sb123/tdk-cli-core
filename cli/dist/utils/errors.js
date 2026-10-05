@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { QUICKSTART_DOCS_URL } from "./constants.js";
 import { getContainerRuntimeStatus } from "./docker.js";
 import { findProjectRoot } from "./paths.js";
+import { suggestClosest } from "./suggestions.js";
 import { isTiltAvailable } from "./tilt.js";
 export function getErrorMessage(err) {
     return err instanceof Error ? err.message : String(err);
@@ -47,14 +48,22 @@ export const errorFactories = {
         "Quit and reopen Docker Desktop, or run `colima restart`",
         "Then verify with: `docker ps`",
     ]),
-    stackNotFound: (name) => new TdkError(`Stack "${name}" not found`, [
-        "Run `tdk stacks` to see available stacks",
-        "Run `tdk stack` to assign resources to a stack",
-    ]),
-    resourceNotFound: (name) => new TdkError(`Resource "${name}" not found`, [
-        "Run `tdk resources` to list all resources",
-        "Check the resource name spelling",
-    ]),
+    stackNotFound: (name, stackNames = []) => {
+        const closest = suggestClosest(name, stackNames);
+        return new TdkError(`Stack "${name}" not found`, [
+            ...(closest ? [`Did you mean "${closest}"?`] : []),
+            "Run `tdk stacks` to see available stacks",
+            "Run `tdk stack` to assign resources to a stack",
+        ]);
+    },
+    resourceNotFound: (name, resourceNames = []) => {
+        const closest = suggestClosest(name, resourceNames);
+        return new TdkError(`Resource "${name}" not found`, [
+            ...(closest ? [`Did you mean "${closest}"?`] : []),
+            "Run `tdk resources` to list all resources",
+            "Check the resource name spelling",
+        ]);
+    },
     directoryExists: (path) => new TdkError(`Directory already exists: ${path}`, [
         "Use `--path` to specify a different location",
         "Remove the existing directory if no longer needed",

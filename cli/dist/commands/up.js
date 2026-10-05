@@ -18,6 +18,7 @@ import { isApiServiceType } from "../utils/resource-kind.js";
 import { appendHealthPath, resolveSubdomainBases } from "../utils/service-urls.js";
 import { discoverResources, discoverResourcesStrict, discoverStacks, stackExists, } from "../utils/services.js";
 import { buildSmokePlans, formatSmokeFailure, runSmokePlans } from "../utils/smoke.js";
+import { suggestClosest } from "../utils/suggestions.js";
 import { evaluateTdkVersionFloor } from "../utils/tdk-version.js";
 import { buildTiltUpArgs, runTilt } from "../utils/tilt.js";
 import { stopTiltOnPort } from "../utils/tilt-process.js";
@@ -183,16 +184,25 @@ export const upCommand = new Command("up")
         const foundRoot = options.dryRun ? requireProjectRoot() : findProjectRoot();
         const projectRoot = foundRoot ?? process.cwd();
         const discoveredResources = discoverResourcesStrict();
+        const discoveredStacks = discoverStacks(discoveredResources);
+        const discoveredStackNames = discoveredStacks.map((stack) => stack.name);
         // Reject a bad request before anything below can write to the project (.env, runtime assets, .tdk/project.json).
         if (options.only) {
             if (stackName && !stackExists(stackName))
-                errorFactories.stackNotFound(stackName).exit();
+                errorFactories.stackNotFound(stackName, discoveredStackNames).exit();
             const candidates = stackName
                 ? discoveredResources.filter((resource) => resource.stack === stackName)
                 : discoveredResources;
             const unknown = findUnknownServices(options.only, candidates);
             if (unknown.length > 0) {
-                const message = `Unknown service ${unknown.join(", ")}. Valid names: ${candidates.map((s) => s.name).join(", ")}`;
+                const validNames = candidates.map((service) => service.name);
+                const suggestions = unknown
+                    .map((name) => {
+                    const closest = suggestClosest(name, validNames);
+                    return closest ? `Did you mean "${closest}" for "${name}"?` : undefined;
+                })
+                    .filter((suggestion) => suggestion !== undefined);
+                const message = `Unknown service ${unknown.join(", ")}. Valid names: ${validNames.join(", ")}${suggestions.length > 0 ? `\n${suggestions.join("\n")}` : ""}`;
                 emit?.({ ok: false }, [{ code: "UNKNOWN_SERVICE", message }]);
                 showErrorAndExit(message, 2);
             }
@@ -231,14 +241,14 @@ export const upCommand = new Command("up")
         if (stackName) {
             servicesToStart = discoveredResources.filter((resource) => resource.stack === stackName);
             if (servicesToStart.length === 0) {
-                errorFactories.stackNotFound(stackName).exit();
+                errorFactories.stackNotFound(stackName, discoveredStackNames).exit();
             }
             focusServiceNames = servicesToStart.map((s) => s.name);
             stackDescription = `stack "${stackName}"`;
         }
         else {
             servicesToStart = discoveredResources;
-            const allStacks = discoverStacks(discoveredResources);
+            const allStacks = discoveredStacks;
             stackDescription = `all stacks (${formatCount(allStacks.length, "stack")}, ${formatCount(servicesToStart.length, "service")})`;
         }
         let dependencyNames = [];

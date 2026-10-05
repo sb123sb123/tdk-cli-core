@@ -111,6 +111,13 @@ describe("tdk logs --json", () => {
     expect(messages.join("\n")).toContain('Did you mean "api"?');
   });
 
+  it("omits name suggestions for an unrelated unknown service", async () => {
+    tilt.runTilt.mockResolvedValueOnce(resources("api", "web"));
+    const { envelope, code } = await run("-s", "completely-unrelated");
+    expect(code).toBe(2);
+    expect(envelope.errors[0]).toMatchObject({ code: "UNKNOWN_SERVICE" });
+    expect(envelope.errors[0].suggestions).toBeUndefined();
+  });
   it("reports a missing Tilt binary", async () => {
     tilt.isTiltAvailable.mockResolvedValue(false);
     const { envelope, code } = await run();

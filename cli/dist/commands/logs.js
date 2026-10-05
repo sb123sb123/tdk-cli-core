@@ -58,10 +58,8 @@ export const logsCommand = new Command("logs")
             const known = await tiltResourceNames(portText);
             const unknown = services.filter((name) => known && !known.includes(name));
             if (unknown.length > 0) {
-                const suggestions = [
-                    ...new Set(unknown.flatMap((name) => errorFactories.resourceNotFound(name, known ?? []).suggestions)),
-                ];
-                fail("UNKNOWN_SERVICE", `Unknown service ${unknown.join(", ")}. Valid names: ${(known ?? []).join(", ")}`, 2, suggestions);
+                const error = errorFactories.unknownServices(unknown, known ?? []);
+                fail("UNKNOWN_SERVICE", error.message, error.exitCode, error.suggestions);
             }
         }
         const args = ["--port", portText, "--tail", String(tail)];

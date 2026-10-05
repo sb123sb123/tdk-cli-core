@@ -4,7 +4,7 @@ Despite its name, `TILT_TECH_STACK.star` is not a semantic-version lockfile. It 
 
 A current generated file contains labels such as:
 
-```python
+```starlark
 {
     "bundler": "vite",
     "runtime": "bun",
@@ -25,16 +25,18 @@ TDK renders the file from `PLATFORM_STANDARDS.tech` in the CLI and uses it as pa
 
 | Field | Current value | Current use |
 | --- | --- | --- |
-| `runtime` | `bun` | The generated Tiltfile checks the selected runtime. Discovery also uses it as the default runtime for a discovered service. |
+| `runtime` | `bun` | The generated Tiltfile checks the selected runtime. `generate_manifest_template` uses it to seed a generated manifest; discovery does not default existing service manifests from it. |
 | `bundler` | `vite` | The generated Tiltfile checks the selected bundler. The value does not select a Vite release. |
 | `orm` | `prisma` | The generated Tiltfile checks the selected ORM. The value does not select a Prisma package or client release. |
-| `messaging` | `nats` | The generated Tiltfile checks the selected messaging tool; discovery uses it as a default feature. The value does not select a NATS image tag. |
+| `messaging` | `nats` | The generated Tiltfile checks the selected messaging tool. `generate_manifest_template` uses it to seed `featuresEnabled`; discovery does not add it as a default feature to existing manifests. The value does not select a NATS image tag. |
 | `language` | `typescript` | Exposed as a technology label; it does not pin a TypeScript package version. |
 | `web_framework` | `hono` | Exposed as a technology label; it does not pin a Hono package version. |
-| `linting` | `biome` | Exposed as a technology label; it does not pin a Biome package version. |
-| `testing` | `vitest` | Exposed as a technology label; it does not pin a Vitest package version. |
+| `linting` | `biome` | Optional validation warns when a supplied value differs from the standard. This does not pin a Biome package version. |
+| `testing` | `vitest` | Optional validation warns when a supplied value differs from the standard. This does not pin a Vitest package version. |
 
-The generated `Tiltfile` validates the runtime, bundler, ORM, and messaging identifiers against the platform standard. The manifest normalizer reads the runtime and messaging constants when it supplies defaults for discovered services. See the [Tiltfile template](../cli/templates/Tiltfile.hbs) and [manifest normalizer](../discovery/manifest/normalize.star) for those consumers. The other fields are included in the exported `TECH_STACK` mapping; none of these values represents a package constraint or container tag.
+The generated `Tiltfile` passes `runtime`, `bundler`, `orm`, and `messaging` from its `TECH_STACK` map to `assert_tech_stack`. The map and the expected strings are both rendered from the same platform standards, so this only detects when the two generated copies drift (for example, after editing one side); it does not check installed package or image versions. The template also defines optional validation warnings for `linting` and `testing` when a caller supplies values that differ from the standards.
+
+The discovery helper reads `RUNTIME` and `MESSAGING` only in `generate_manifest_template`, where they seed `runtime` and `featuresEnabled` in a generated manifest; `_load_and_normalize` does not apply them as defaults to discovered `service.json` files. `language` and `web_framework` are exported labels only. `PLATFORM_STANDARDS.tech` also contains `database: postgresql`, but the `TILT_TECH_STACK.star` template does not render that property, so it is absent from the generated file. See the [Tiltfile template](../cli/templates/Tiltfile.hbs) and [manifest normalizer](../discovery/manifest/normalize.star) for those consumers. None of the rendered labels represents a package constraint or container tag.
 
 ## Where versions live
 

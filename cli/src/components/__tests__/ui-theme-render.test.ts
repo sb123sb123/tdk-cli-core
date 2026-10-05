@@ -1,7 +1,7 @@
 import { renderToString } from "ink";
 import { createElement, Fragment } from "react";
 import { describe, expect, it } from "vitest";
-import { LoadingScreen } from "../../commands/ui.js";
+import { LoadingScreen, TUIHeader } from "../../commands/ui.js";
 import { FileTree } from "../FileTree.js";
 import { TabBar } from "../TabBar.js";
 import { createTUITheme, TUIThemeContext } from "../ui-theme.js";
@@ -43,6 +43,28 @@ describe("plain terminal theme", () => {
     expect(output).not.toContain(String.fromCodePoint(0x1f433));
     expect(output).not.toContain("\u2593\u2592\u2591");
     expect(output).not.toContain("\u2500");
+    expect(output).not.toContain(String.fromCharCode(27));
+  });
+
+  it("renders the ASCII command-screen heading and divider", () => {
+    const theme = createTUITheme(false, { TERM: "dumb" });
+    const output = renderToString(
+      createElement(
+        TUIThemeContext.Provider,
+        { value: theme },
+        createElement(TUIHeader, {
+          projectRoot: "example",
+          serviceCount: 2,
+          terminalWidth: 80,
+          compact: false,
+        }),
+      ),
+      { columns: 80 },
+    );
+
+    expect(output).toContain(">>> TDK NEON EDITION <<<");
+    expect(output).toMatch(/-{10,}/);
+    expect(output).not.toContain(String.fromCharCode(0x2500));
     expect(output).not.toContain(String.fromCharCode(27));
   });
 });

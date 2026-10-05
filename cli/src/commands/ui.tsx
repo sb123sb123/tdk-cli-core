@@ -215,6 +215,44 @@ function createHelpHint(
   return ["[Tab] Next", "[1-5] Tabs", ...common, "[q] Quit"].join(separator);
 }
 
+type TUIHeaderProps = {
+  projectRoot: string;
+  serviceCount: number;
+  terminalWidth: number;
+  compact: boolean;
+};
+
+/** Render the TUI banner and width-aware separator. */
+export const TUIHeader: React.FC<TUIHeaderProps> = ({
+  projectRoot,
+  serviceCount,
+  terminalWidth,
+  compact,
+}) => {
+  const theme = useTUITheme();
+  return (
+    <>
+      <Box paddingX={1} paddingY={0}>
+        <Text>
+          <Text color={theme.accent} bold>
+            {theme.bannerStart} TDK NEON EDITION {theme.bannerEnd}
+          </Text>
+          <Text color={theme.muted}>{theme.ascii ? " | " : " \u2502 "}</Text>
+          <Text color={theme.foreground}>{projectRoot}</Text>
+          <Text color={theme.muted}>{theme.ascii ? " | " : " \u2502 "}</Text>
+          <Text color={theme.success}>{serviceCount} services ready</Text>
+        </Text>
+      </Box>
+
+      <Box paddingX={1}>
+        <Text color={theme.muted}>
+          {(theme.ascii ? "-" : "\u2500").repeat(compact ? 60 : Math.min(terminalWidth - 4, 100))}
+        </Text>
+      </Box>
+    </>
+  );
+};
+
 const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   const theme = useTUITheme();
   const { exit } = useApp();
@@ -684,23 +722,12 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
 
   return (
     <Box flexDirection="column" height={stdout.rows || 24}>
-      <Box paddingX={1} paddingY={0}>
-        <Text>
-          <Text color={theme.accent} bold>
-            {theme.bannerStart} TDK NEON EDITION {theme.bannerEnd}
-          </Text>
-          <Text color={theme.muted}>{theme.ascii ? " | " : " │ "}</Text>
-          <Text color={theme.foreground}>{projectRoot}</Text>
-          <Text color={theme.muted}>{theme.ascii ? " | " : " │ "}</Text>
-          <Text color={theme.success}>{services.length} services ready</Text>
-        </Text>
-      </Box>
-
-      <Box paddingX={1}>
-        <Text color={theme.muted}>
-          {(theme.ascii ? "-" : "─").repeat(compact ? 60 : Math.min(terminalWidth - 4, 100))}
-        </Text>
-      </Box>
+      <TUIHeader
+        projectRoot={projectRoot}
+        serviceCount={services.length}
+        terminalWidth={terminalWidth}
+        compact={compact}
+      />
 
       {isSearching && (
         <Box paddingX={1} height={1}>

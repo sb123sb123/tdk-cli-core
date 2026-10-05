@@ -16,7 +16,7 @@ describe("tdk ui theme", () => {
 
     expect(theme.highContrast).toBe(true);
     expect(theme.accent).toBe("cyanBright");
-    expect(theme.muted).toBe("whiteBright");
+    expect(theme.muted).toBe("white");
     expect(theme.border).toBe("whiteBright");
     expect(theme.success).toBe("greenBright");
     expect(theme.warning).toBe("yellowBright");
@@ -34,7 +34,7 @@ describe("tdk ui theme", () => {
     expect(getTUIStatusIcon(theme, "?", "gray")).toBe("[?]");
   });
 
-  it.each([{ NO_COLOR: "1" }, { TERM: "dumb" }])(
+  it.each([{ NO_COLOR: "1" }, { NO_COLOR: "" }, { TERM: "dumb" }, { TERM: "dumb-256color" }])(
     "disables styling and uses ASCII markers for a plain terminal",
     (environment) => {
       const theme = createTUITheme(true, environment);

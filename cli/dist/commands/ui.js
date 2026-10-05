@@ -13,7 +13,7 @@ import { isTiltAvailable } from "../utils/tilt.js";
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
 const HelpPanel = ({ onClose }) => {
     const theme = useTUITheme();
-    return (_jsxs(Box, { borderStyle: theme.ascii ? undefined : "single", borderColor: theme.accent, paddingX: 2, paddingY: 1, flexDirection: "column", width: 60, children: [_jsx(Text, { bold: true, color: theme.accent, children: "Keyboard Shortcuts" }), _jsxs(Box, { marginY: 1, flexDirection: "column", children: [_jsx(Text, { bold: true, underline: true, color: theme.foreground, children: "Navigation" }), _jsx(Text, { children: theme.ascii ? "[UP/DOWN] Navigate list items" : "\u2191/\u2193 Navigate list items" }), _jsx(Text, { color: theme.foreground, children: " Enter Select item / Open detail" }), _jsx(Text, { color: theme.foreground, children: " Space Toggle expand (tree view)" }), _jsx(Text, { color: theme.foreground, children: " Tab Next tab" }), _jsx(Text, { color: theme.foreground, children: " 1-5 Direct tab access" }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { bold: true, underline: true, color: theme.foreground, children: "Actions" }) }), _jsx(Text, { color: theme.foreground, children: " m Toggle mouse support" }), _jsx(Text, { color: theme.foreground, children: " t Toggle tooltips" }), _jsx(Text, { color: theme.foreground, children: " e Toggle enabled/disabled services" }), _jsx(Text, { color: theme.foreground, children: " r Refresh data" }), _jsx(Text, { color: theme.foreground, children: " / Search/filter" }), _jsx(Text, { color: theme.foreground, children: " ? Show this help" }), _jsx(Text, { children: theme.ascii ? "q Quit | Esc Back" : "q Quit \u2502 Esc Back" })] }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { color: theme.muted, dimColor: theme.dimMuted, children: "Press any key to close..." }) })] }));
+    return (_jsxs(Box, { ...(theme.ascii ? {} : { borderStyle: "single", borderColor: theme.accent }), paddingX: 2, paddingY: 1, flexDirection: "column", width: 60, children: [_jsx(Text, { bold: true, color: theme.accent, children: "Keyboard Shortcuts" }), _jsxs(Box, { marginY: 1, flexDirection: "column", children: [_jsx(Text, { bold: true, underline: true, color: theme.foreground, children: "Navigation" }), _jsx(Text, { children: theme.ascii ? "[UP/DOWN] Navigate list items" : "\u2191/\u2193 Navigate list items" }), _jsx(Text, { color: theme.foreground, children: " Enter Select item / Open detail" }), _jsx(Text, { color: theme.foreground, children: " Tab Next tab" }), _jsx(Text, { color: theme.foreground, children: " 1-5 Direct tab access" }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { bold: true, underline: true, color: theme.foreground, children: "Actions" }) }), _jsx(Text, { color: theme.foreground, children: " m Toggle mouse support" }), _jsx(Text, { color: theme.foreground, children: " t Toggle tooltips" }), _jsx(Text, { color: theme.foreground, children: " e Toggle enabled/disabled services" }), _jsx(Text, { color: theme.foreground, children: " r Refresh data" }), _jsx(Text, { color: theme.foreground, children: " / Search/filter" }), _jsx(Text, { color: theme.foreground, children: " ? Show this help" }), _jsx(Text, { children: theme.ascii ? "q Quit | Esc Back" : "q Quit \u2502 Esc Back" })] }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { color: theme.muted, dimColor: theme.dimMuted, children: "Press any key to close..." }) })] }));
 };
 const SPINNER_FRAMES = [
     "\u280B",
@@ -49,6 +49,7 @@ const EmptyState = ({ message }) => {
     const theme = useTUITheme();
     return (_jsxs(Box, { flexDirection: "column", padding: 2, alignItems: "center", children: [_jsx(Text, { bold: true, color: theme.warning, children: "No Services Found" }), _jsx(Box, { marginY: 1 }), _jsxs(Text, { color: theme.muted, children: [theme.ascii ? "[*]" : "◉", " No service.json files found"] }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: theme.foreground, children: "To get started:" }), _jsx(Text, { color: theme.foreground, children: " 1. Run: tdk project" }), _jsx(Text, { color: theme.foreground, children: " 2. Run: tdk resource api --type backend" }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: theme.accent, children: "Press [r] to refresh or [q] to quit" }), message && (_jsx(Box, { paddingX: 1, height: 1, children: _jsxs(Text, { color: theme.accent, children: [theme.bannerStart, " ", message, " ", theme.bannerEnd] }) }))] }));
 };
+/** Compose footer guidance for the current tab and terminal character set. */
 function createHelpHint(activeTab, selectedStack, selectedService, showEnabledOnly, ascii) {
     const separator = ascii ? " | " : " \u2502 ";
     const enabledHint = `[e] ${showEnabledOnly ? "show all" : "enabled only"}`;
@@ -67,12 +68,7 @@ function createHelpHint(activeTab, selectedStack, selectedService, showEnabledOn
         return ["Event timeline", "[Tab] Switch tabs", ...common].join(separator);
     }
     if (activeTab === "files" && selectedService) {
-        return [
-            `Service ${JSON.stringify(selectedService)}`,
-            "[Space] Expand",
-            "[Esc] Back",
-            ...common,
-        ].join(separator);
+        return [`Service ${JSON.stringify(selectedService)}`, "[Esc] Back", ...common].join(separator);
     }
     if (activeTab === "files") {
         return ["Select service to view files", ...common].join(separator);

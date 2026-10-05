@@ -26,10 +26,14 @@ type TUIEnvironment = {
     NO_COLOR?: string;
     TERM?: string;
 };
+/** Build the TUI palette from the requested theme and terminal environment. */
 export declare function createTUITheme(highContrast: boolean, environment?: TUIEnvironment): TUITheme;
+/** Map a formatter status color to the active theme palette. */
 export declare function getTUIStatusColor(theme: TUITheme, color: string | undefined): TUIColor;
+/** Return a status marker suited to the active terminal character set. */
 export declare function getTUIStatusIcon(theme: TUITheme, icon: string, color: string | undefined): string;
 export declare const TUIThemeContext: import("react").Context<TUITheme>;
+/** Read the theme provided to the current TUI subtree. */
 export declare function useTUITheme(): TUITheme;
 export {};
 //# sourceMappingURL=ui-theme.d.ts.map

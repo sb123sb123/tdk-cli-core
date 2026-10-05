@@ -38,8 +38,7 @@ const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => {
   const theme = useTUITheme();
   return (
     <Box
-      borderStyle={theme.ascii ? undefined : "single"}
-      borderColor={theme.accent}
+      {...(theme.ascii ? {} : { borderStyle: "single" as const, borderColor: theme.accent })}
       paddingX={2}
       paddingY={1}
       flexDirection="column"
@@ -56,7 +55,6 @@ const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => {
           {theme.ascii ? "[UP/DOWN] Navigate list items" : "\u2191/\u2193 Navigate list items"}
         </Text>
         <Text color={theme.foreground}> Enter Select item / Open detail</Text>
-        <Text color={theme.foreground}> Space Toggle expand (tree view)</Text>
         <Text color={theme.foreground}> Tab Next tab</Text>
         <Text color={theme.foreground}> 1-5 Direct tab access</Text>
 
@@ -174,6 +172,7 @@ const EmptyState: React.FC<{ message?: string }> = ({ message }) => {
   );
 };
 
+/** Compose footer guidance for the current tab and terminal character set. */
 function createHelpHint(
   activeTab: TabId,
   selectedStack: string | null,
@@ -202,12 +201,7 @@ function createHelpHint(
   }
 
   if (activeTab === "files" && selectedService) {
-    return [
-      `Service ${JSON.stringify(selectedService)}`,
-      "[Space] Expand",
-      "[Esc] Back",
-      ...common,
-    ].join(separator);
+    return [`Service ${JSON.stringify(selectedService)}`, "[Esc] Back", ...common].join(separator);
   }
 
   if (activeTab === "files") {

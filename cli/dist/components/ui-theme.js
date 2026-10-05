@@ -16,13 +16,15 @@ const HIGH_CONTRAST_FILE_COLORS = {
     generated: "whiteBright",
     unknown: "whiteBright",
 };
+/** Build the TUI palette from the requested theme and terminal environment. */
 export function createTUITheme(highContrast, environment = process.env) {
-    const ascii = Boolean(environment.NO_COLOR) || environment.TERM === "dumb";
+    const ascii = environment.NO_COLOR !== undefined ||
+        environment.TERM?.toLowerCase().startsWith("dumb") === true;
     const palette = highContrast
         ? {
             accent: "cyanBright",
             border: "whiteBright",
-            muted: "whiteBright",
+            muted: "white",
             foreground: "whiteBright",
             success: "greenBright",
             warning: "yellowBright",
@@ -82,15 +84,17 @@ export function createTUITheme(highContrast, environment = process.env) {
         selectionMarker: ascii ? ">>>" : "\u2593\u2592\u2591",
     };
 }
+const STATUS_COLOR_THEMES = {
+    green: "success",
+    yellow: "warning",
+    red: "error",
+};
+/** Map a formatter status color to the active theme palette. */
 export function getTUIStatusColor(theme, color) {
-    if (color === "green")
-        return theme.success;
-    if (color === "yellow")
-        return theme.warning;
-    if (color === "red")
-        return theme.error;
-    return theme.muted;
+    const themeKey = STATUS_COLOR_THEMES[color ?? ""];
+    return themeKey ? theme[themeKey] : theme.muted;
 }
+/** Return a status marker suited to the active terminal character set. */
 export function getTUIStatusIcon(theme, icon, color) {
     if (!theme.ascii)
         return icon;
@@ -103,6 +107,7 @@ export function getTUIStatusIcon(theme, icon, color) {
     return "[?]";
 }
 export const TUIThemeContext = createContext(createTUITheme(false));
+/** Read the theme provided to the current TUI subtree. */
 export function useTUITheme() {
     return useContext(TUIThemeContext);
 }

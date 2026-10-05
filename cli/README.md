@@ -130,7 +130,7 @@ The frontend provider owns root `index.html` and starter source. After TDK gener
 
 | Command | Description |
 |---------|-------------|
-| `tdk ui` | 🎨 Interactive terminal UI |
+| `tdk ui [--high-contrast] [--no-animations]` | 🎨 Interactive terminal UI |
 | `tdk networks` | 🌐 Show Traefik-routed URLs (`--stack`, `--json`, `--raw`) |
 | `tdk config regenerate` | ♻️ Regenerate master config files from `.tdk/project.json` |
 | `tdk config verify` | ✅ Check generated files match `.tdk/project.json` |
@@ -143,6 +143,10 @@ The frontend provider owns root `index.html` and starter source. After TDK gener
 
 `-v` is context-specific: `tdk -v` prints the version, while `tdk up -v` and `tdk down -v`
 enable verbose output. Use `--version` and `--verbose` when clarity matters.
+
+Use `tdk ui --high-contrast` for bright, non-dim colors. `tdk ui --no-animations` keeps the
+loading screen static. `NO_COLOR` or `TERM=dumb` disables color styling and uses ASCII
+markers, separators, and file-tree symbols.
 
 If `tdk ui` finds no services, its empty state points to `tdk project` to create a
 project and `tdk resource api --type backend` to add a service. Press `q` to leave

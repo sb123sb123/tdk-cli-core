@@ -2,12 +2,14 @@ import { Box, Text } from "ink";
 import type React from "react";
 import type { ResourceTableProps } from "../types/index.js";
 import { formatShortDate, getStatusColor, getStatusIcon, truncate } from "../utils/formatting.js";
+import { getTUIStatusColor, getTUIStatusIcon, useTUITheme } from "./ui-theme.js";
 
 export const ResourceTable: React.FC<ResourceTableProps> = ({ resources, maxWidth = 100 }) => {
+  const theme = useTUITheme();
   if (resources.length === 0) {
     return (
       <Box paddingY={1}>
-        <Text color="gray">No resources found</Text>
+        <Text color={theme.muted}>No resources found</Text>
       </Box>
     );
   }
@@ -16,41 +18,59 @@ export const ResourceTable: React.FC<ResourceTableProps> = ({ resources, maxWidt
 
   return (
     <Box flexDirection="column">
-      <Box flexDirection="row" borderStyle="single" borderColor="gray" paddingX={1}>
+      <Box
+        flexDirection="row"
+        borderStyle={theme.ascii ? undefined : "single"}
+        borderColor={theme.border}
+        paddingX={1}
+      >
         <Box width={narrowMode ? 20 : 25}>
-          <Text bold>Logical ID</Text>
+          <Text bold color={theme.foreground}>
+            Logical ID
+          </Text>
         </Box>
         {!narrowMode && (
           <Box width={20}>
-            <Text bold>Physical ID</Text>
+            <Text bold color={theme.foreground}>
+              Physical ID
+            </Text>
           </Box>
         )}
         <Box width={12}>
-          <Text bold>Type</Text>
+          <Text bold color={theme.foreground}>
+            Type
+          </Text>
         </Box>
         <Box width={15}>
-          <Text bold>Status</Text>
+          <Text bold color={theme.foreground}>
+            Status
+          </Text>
         </Box>
         {!narrowMode && (
           <Box width={20}>
-            <Text bold>Created</Text>
+            <Text bold color={theme.foreground}>
+              Created
+            </Text>
           </Box>
         )}
       </Box>
 
-      {resources.map((resource, index) => {
-        const statusColor = getStatusColor(resource.status);
-        const statusIcon = getStatusIcon(resource.status);
-        const _isEven = index % 2 === 0;
+      {resources.map((resource) => {
+        const statusColor = getTUIStatusColor(theme, getStatusColor(resource.status));
+        const statusIcon = getTUIStatusIcon(
+          theme,
+          getStatusIcon(resource.status),
+          getStatusColor(resource.status),
+        );
 
         return (
           <Box key={resource.name} flexDirection="row" paddingX={1}>
             <Box width={narrowMode ? 20 : 25}>
-              <Text>{truncate(resource.name, narrowMode ? 18 : 23)}</Text>
+              <Text color={theme.foreground}>{truncate(resource.name, narrowMode ? 18 : 23)}</Text>
             </Box>
             {!narrowMode && (
               <Box width={20}>
-                <Text color="gray">
+                <Text color={theme.muted}>
                   {resource.stack && resource.stack !== "unknown"
                     ? truncate(`${resource.stack}/${resource.name}`, 18)
                     : truncate(resource.name, 18)}
@@ -58,16 +78,18 @@ export const ResourceTable: React.FC<ResourceTableProps> = ({ resources, maxWidt
               </Box>
             )}
             <Box width={12}>
-              <Text color="cyan">{resource.type}</Text>
+              <Text color={theme.accent} bold={theme.highContrast}>
+                {resource.type}
+              </Text>
             </Box>
             <Box width={15}>
-              <Text color={statusColor}>
+              <Text color={statusColor} bold={theme.highContrast}>
                 {statusIcon} {resource.status}
               </Text>
             </Box>
             {!narrowMode && (
               <Box width={20}>
-                <Text color="gray">{formatShortDate(resource.createdAt)}</Text>
+                <Text color={theme.muted}>{formatShortDate(resource.createdAt)}</Text>
               </Box>
             )}
           </Box>

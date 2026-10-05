@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { Box, render, Text, useApp, useInput, useStdin, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DetailPanel, FileTree, ResourceSelectInput, ResourceTable, TabBar, } from "../components/index.js";
+import { createTUITheme, TUIThemeContext, useTUITheme } from "../components/ui-theme.js";
 import { errorFactories, requireProjectRoot } from "../utils/errors.js";
 import { findProjectRoot } from "../utils/paths.js";
 import { describeSearch } from "../utils/search-status.js";
@@ -10,22 +11,79 @@ import { clearMetadataCache, discoverResources, discoverStacks, getResourceMetad
 import { createStatusMessageController } from "../utils/status-message.js";
 import { isTiltAvailable } from "../utils/tilt.js";
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
-const HelpPanel = ({ onClose }) => (_jsxs(Box, { borderStyle: "single", borderColor: "cyan", paddingX: 2, paddingY: 1, flexDirection: "column", width: 60, children: [_jsx(Text, { bold: true, color: "cyan", children: "Keyboard Shortcuts" }), _jsxs(Box, { marginY: 1, flexDirection: "column", children: [_jsx(Text, { bold: true, underline: true, children: "Navigation" }), _jsx(Text, { children: " \u2191/\u2193 Navigate list items" }), _jsx(Text, { children: " Enter Select item / Open detail" }), _jsx(Text, { children: " Space Toggle expand (tree view)" }), _jsx(Text, { children: " Tab Next tab" }), _jsx(Text, { children: " 1-5 Direct tab access" }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { bold: true, underline: true, children: "Actions" }) }), _jsx(Text, { children: " m Toggle mouse support" }), _jsx(Text, { children: " t Toggle tooltips" }), _jsx(Text, { children: " e Toggle enabled/disabled services" }), _jsx(Text, { children: " r Refresh data" }), _jsx(Text, { children: " / Search/filter" }), _jsx(Text, { children: " ? Show this help" }), _jsx(Text, { children: " q Quit \u2502 Esc Back" })] }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { color: "gray", dimColor: true, children: "Press any key to close..." }) })] }));
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const HelpPanel = ({ onClose }) => {
+    const theme = useTUITheme();
+    return (_jsxs(Box, { borderStyle: theme.ascii ? undefined : "single", borderColor: theme.accent, paddingX: 2, paddingY: 1, flexDirection: "column", width: 60, children: [_jsx(Text, { bold: true, color: theme.accent, children: "Keyboard Shortcuts" }), _jsxs(Box, { marginY: 1, flexDirection: "column", children: [_jsx(Text, { bold: true, underline: true, color: theme.foreground, children: "Navigation" }), _jsx(Text, { children: theme.ascii ? "[UP/DOWN] Navigate list items" : "\u2191/\u2193 Navigate list items" }), _jsx(Text, { color: theme.foreground, children: " Enter Select item / Open detail" }), _jsx(Text, { color: theme.foreground, children: " Space Toggle expand (tree view)" }), _jsx(Text, { color: theme.foreground, children: " Tab Next tab" }), _jsx(Text, { color: theme.foreground, children: " 1-5 Direct tab access" }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { bold: true, underline: true, color: theme.foreground, children: "Actions" }) }), _jsx(Text, { color: theme.foreground, children: " m Toggle mouse support" }), _jsx(Text, { color: theme.foreground, children: " t Toggle tooltips" }), _jsx(Text, { color: theme.foreground, children: " e Toggle enabled/disabled services" }), _jsx(Text, { color: theme.foreground, children: " r Refresh data" }), _jsx(Text, { color: theme.foreground, children: " / Search/filter" }), _jsx(Text, { color: theme.foreground, children: " ? Show this help" }), _jsx(Text, { children: theme.ascii ? "q Quit | Esc Back" : "q Quit \u2502 Esc Back" })] }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { color: theme.muted, dimColor: theme.dimMuted, children: "Press any key to close..." }) })] }));
+};
+const SPINNER_FRAMES = [
+    "\u280B",
+    "\u2819",
+    "\u2839",
+    "\u2838",
+    "\u283C",
+    "\u2834",
+    "\u2826",
+    "\u2827",
+    "\u2807",
+    "\u280F",
+];
+const ASCII_SPINNER_FRAMES = ["-", "/", "|", "\\"];
 export const LoadingScreen = ({ message = "Discovering resources...", animated = true, }) => {
+    const theme = useTUITheme();
+    const spinnerFrames = theme.ascii ? ASCII_SPINNER_FRAMES : SPINNER_FRAMES;
     const [frame, setFrame] = useState(0);
     useEffect(() => {
         if (!animated)
             return;
-        const timer = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 80);
+        const timer = setInterval(() => setFrame((f) => (f + 1) % spinnerFrames.length), 80);
         return () => clearInterval(timer);
-    }, [animated]);
-    return (_jsxs(Box, { flexDirection: "column", padding: 2, children: [_jsx(Text, { bold: true, color: "cyan", children: "\u2593\u2592\u2591 TDK NEON EDITION \u2591\u2592\u2593" }), _jsx(Box, { marginY: 1 }), _jsxs(Text, { children: [animated && _jsxs(Text, { color: "cyan", children: [SPINNER_FRAMES[frame], " "] }), message] })] }));
+    }, [animated, spinnerFrames.length]);
+    return (_jsxs(Box, { flexDirection: "column", padding: 2, children: [_jsxs(Text, { bold: true, color: theme.accent, children: [theme.bannerStart, " TDK NEON EDITION ", theme.bannerEnd] }), _jsx(Box, { marginY: 1 }), _jsxs(Text, { color: theme.foreground, children: [animated && _jsxs(Text, { color: theme.accent, children: [spinnerFrames[frame], " "] }), message] })] }));
 };
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
-const ErrorScreen = ({ error, onRetry }) => (_jsxs(Box, { flexDirection: "column", padding: 2, alignItems: "center", children: [_jsx(Text, { bold: true, color: "red", children: "Could Not Load Services" }), _jsx(Box, { marginY: 1 }), _jsxs(Text, { color: "red", children: ["\u2717 ", error] }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: "gray", children: "Troubleshooting:" }), _jsx(Text, { color: "gray", children: " 1. Check that every service.json is valid JSON" }), _jsx(Text, { color: "gray", children: " 2. Run tdk from your project (the folder with the Tiltfile)" }), _jsx(Text, { color: "gray", children: " 3. Try: tdk status --verbose" }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: "cyan", children: "Press [r] to retry or [q] to quit" })] }));
-const EmptyState = ({ message }) => (_jsxs(Box, { flexDirection: "column", padding: 2, alignItems: "center", children: [_jsx(Text, { bold: true, color: "yellow", children: "No Services Found" }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: "gray", children: "\u25C9 No service.json files found" }), _jsx(Box, { marginY: 1 }), _jsx(Text, { children: "To get started:" }), _jsx(Text, { children: " 1. Run: tdk project" }), _jsx(Text, { children: " 2. Run: tdk resource api --type backend" }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: "cyan", children: "Press [r] to refresh or [q] to quit" }), message && (_jsx(Box, { paddingX: 1, height: 1, children: _jsxs(Text, { color: "cyan", children: ["\u2593\u2592\u2591 ", message, " \u2591\u2592\u2593"] }) }))] }));
+const ErrorScreen = ({ error, onRetry }) => {
+    const theme = useTUITheme();
+    return (_jsxs(Box, { flexDirection: "column", padding: 2, alignItems: "center", children: [_jsx(Text, { bold: true, color: theme.error, children: "Could Not Load Services" }), _jsx(Box, { marginY: 1 }), _jsxs(Text, { color: theme.error, children: [theme.ascii ? "x" : "✗", " ", error] }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: theme.muted, children: "Troubleshooting:" }), _jsx(Text, { color: theme.muted, children: " 1. Check that every service.json is valid JSON" }), _jsx(Text, { color: theme.muted, children: " 2. Run tdk from your project (the folder with the Tiltfile)" }), _jsx(Text, { color: theme.muted, children: " 3. Try: tdk status --verbose" }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: theme.accent, children: "Press [r] to retry or [q] to quit" })] }));
+};
+const EmptyState = ({ message }) => {
+    const theme = useTUITheme();
+    return (_jsxs(Box, { flexDirection: "column", padding: 2, alignItems: "center", children: [_jsx(Text, { bold: true, color: theme.warning, children: "No Services Found" }), _jsx(Box, { marginY: 1 }), _jsxs(Text, { color: theme.muted, children: [theme.ascii ? "[*]" : "◉", " No service.json files found"] }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: theme.foreground, children: "To get started:" }), _jsx(Text, { color: theme.foreground, children: " 1. Run: tdk project" }), _jsx(Text, { color: theme.foreground, children: " 2. Run: tdk resource api --type backend" }), _jsx(Box, { marginY: 1 }), _jsx(Text, { color: theme.accent, children: "Press [r] to refresh or [q] to quit" }), message && (_jsx(Box, { paddingX: 1, height: 1, children: _jsxs(Text, { color: theme.accent, children: [theme.bannerStart, " ", message, " ", theme.bannerEnd] }) }))] }));
+};
+function createHelpHint(activeTab, selectedStack, selectedService, showEnabledOnly, ascii) {
+    const separator = ascii ? " | " : " \u2502 ";
+    const enabledHint = `[e] ${showEnabledOnly ? "show all" : "enabled only"}`;
+    const common = [enabledHint, "[?] help"];
+    if (activeTab === "overview") {
+        const introduction = selectedStack
+            ? `Stack ${JSON.stringify(selectedStack)} selected. [Enter] view`
+            : `${ascii ? "[UP/DOWN]" : "[\u2191/\u2193]"} Navigate`;
+        const controls = selectedStack ? ["[Esc] back", ...common] : ["[Enter] Select", ...common];
+        return [introduction, ...controls].join(separator);
+    }
+    if (activeTab === "resources") {
+        return ["[Tab] Tabs", "[r] Refresh", "[/] Search", ...common].join(separator);
+    }
+    if (activeTab === "events") {
+        return ["Event timeline", "[Tab] Switch tabs", ...common].join(separator);
+    }
+    if (activeTab === "files" && selectedService) {
+        return [
+            `Service ${JSON.stringify(selectedService)}`,
+            "[Space] Expand",
+            "[Esc] Back",
+            ...common,
+        ].join(separator);
+    }
+    if (activeTab === "files") {
+        return ["Select service to view files", ...common].join(separator);
+    }
+    if (activeTab === "config") {
+        return ["View configurations", ...common].join(separator);
+    }
+    return ["[Tab] Next", "[1-5] Tabs", ...common, "[q] Quit"].join(separator);
+}
 const TUIApp = ({ animated = true }) => {
+    const theme = useTUITheme();
     const { exit } = useApp();
     const { stdout } = useStdout();
     const { stdin, setRawMode } = useStdin();
@@ -420,6 +478,7 @@ const TUIApp = ({ animated = true }) => {
     const showSidebar = terminalWidth > 100;
     const compactTabBar = terminalWidth < 100;
     const compact = terminalWidth < 80;
+    const helpHint = createHelpHint(activeTab, selectedStack, selectedService, showEnabledOnly, theme.ascii);
     if (loading) {
         return _jsx(LoadingScreen, { message: "Discovering resources...", animated: animated });
     }
@@ -429,22 +488,15 @@ const TUIApp = ({ animated = true }) => {
     if (services.length === 0) {
         return _jsx(EmptyState, { message: message });
     }
-    return (_jsxs(Box, { flexDirection: "column", height: stdout.rows || 24, children: [_jsx(Box, { paddingX: 1, paddingY: 0, children: _jsxs(Text, { children: [_jsx(Text, { color: "cyan", bold: true, children: "\u2593\u2592\u2591 TDK NEON EDITION \u2591\u2592\u2593" }), _jsx(Text, { color: "gray", children: " \u2502 " }), _jsx(Text, { color: "white", children: projectRoot }), _jsx(Text, { color: "gray", children: " \u2502 " }), _jsxs(Text, { color: "green", children: [services.length, " services ready"] })] }) }), _jsx(Box, { paddingX: 1, children: _jsx(Text, { color: "gray", children: "─".repeat(compact ? 60 : Math.min(terminalWidth - 4, 100)) }) }), isSearching && (_jsxs(Box, { paddingX: 1, height: 1, children: [_jsxs(Text, { color: "yellow", children: ["Search: ", searchQuery, "_"] }), searchStatus && _jsx(Text, { color: "gray", dimColor: true, children: `   ${searchStatus.summary}` })] })), searchStatus?.emptyMessage && (_jsx(Box, { paddingX: 1, height: 1, children: _jsx(Text, { color: "gray", children: searchStatus.emptyMessage }) })), !isSearching && message && (_jsx(Box, { paddingX: 1, height: 1, children: _jsxs(Text, { color: "cyan", children: ["\u2593\u2592\u2591 ", message, " \u2591\u2592\u2593"] }) })), !isSearching && !message && showTooltips && !showHelp && (_jsx(Box, { paddingX: 1, height: 1, children: _jsx(Text, { color: "gray", dimColor: true, children: activeTab === "overview" && selectedStack
-                        ? `Stack "${selectedStack}" selected. [Enter] view │ [Esc] back │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                        : activeTab === "overview" && !selectedStack
-                            ? `[↑/↓] Navigate │ [Enter] Select │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                            : activeTab === "resources"
-                                ? `[Tab] Tabs │ [r] Refresh │ [/] Search │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                                : activeTab === "events"
-                                    ? `Event timeline │ [Tab] Switch tabs │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                                    : activeTab === "files" && selectedService
-                                        ? `Service "${selectedService}" │ [Space] Expand │ [Esc] Back │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                                        : activeTab === "files"
-                                            ? `Select service to view files │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                                            : activeTab === "config"
-                                                ? `View configurations │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                                                : `[Tab] Next │ [1-5] Tabs │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help │ [q] Quit` }) })), showHelp && (_jsx(Box, { paddingX: 1, flexGrow: 1, children: _jsx(HelpPanel, { onClose: () => setShowHelp(false) }) })), !showHelp && (_jsxs(_Fragment, { children: [_jsx(Box, { marginTop: 1, children: _jsx(TabBar, { activeTab: activeTab, onTabChange: setActiveTab, compact: compactTabBar }) }), _jsxs(Box, { flexDirection: "row", paddingX: 1, flexGrow: 1, children: [_jsxs(Box, { flexDirection: "column", flexGrow: 1, width: showSidebar ? terminalWidth - 45 : terminalWidth - 4, children: [activeTab === "overview" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: "gray", children: "\u250C\u2500 Stacks \u2500" }) }), _jsx(Box, { marginTop: 1, flexGrow: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] })), activeTab === "resources" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: "gray", children: "\u250C\u2500 Resources \u2500" }) }), selectedStackData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: "gray", children: ["Stack: ", selectedStackData.stack.name] }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceTable, { resources: selectedStackData.metadata.resources, maxWidth: terminalWidth - (showSidebar ? 50 : 10) }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: "gray", children: "Select a stack to view resources" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] }))] })), activeTab === "events" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: "gray", children: "\u250C\u2500 Events \u2500" }) }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { color: "gray", children: "Events tab not yet implemented" }) })] })), activeTab === "files" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: "gray", children: "\u250C\u2500 Autogenerated Files \u2500" }) }), selectedServiceData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: "gray", children: ["Service: ", selectedServiceData.service.name] }), _jsx(Box, { marginTop: 1, children: _jsx(FileTree, { nodes: fileTreeNodes, selectedPath: selectedFile || undefined }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: "gray", children: "Select a service to view files" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] }))] })), activeTab === "config" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: "gray", children: "\u250C\u2500 Configuration \u2500" }) }), selectedServiceData ? (_jsxs(Box, { marginTop: 1, flexDirection: "column", children: [_jsx(Text, { color: "cyan", children: selectedServiceData.service.configPath }), _jsx(Box, { marginTop: 1, borderStyle: "single", borderColor: "gray", paddingX: 1, children: _jsx(Text, { color: "gray", wrap: "wrap", children: JSON.stringify(selectedServiceData.service.config, null, 2).slice(0, 1000) }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: "gray", children: "Select a service to view configuration" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] }))] }))] }), showSidebar && (_jsx(Box, { marginLeft: 2, children: _jsx(DetailPanel, { stack: selectedStackData?.stack || null, service: selectedServiceData?.service || null, stackMetadata: selectedStackData?.metadata || null, visible: !!selectedStack || !!selectedService }) }))] }), _jsxs(Box, { borderStyle: "single", borderColor: "gray", paddingX: 1, height: 3, flexDirection: "column", marginTop: 1, children: [_jsxs(Box, { justifyContent: "space-between", children: [_jsxs(Text, { color: "cyan", bold: true, children: ["\u2593\u2592\u2591 ", activeTab] }), _jsxs(Text, { color: "green", children: ["\u25CF ", services.filter((s) => s.stack).length, " in stack"] }), _jsxs(Text, { color: "yellow", children: ["\u25CB ", services.filter((s) => !s.stack).length, " no stack"] })] }), _jsxs(Box, { justifyContent: "space-between", children: [_jsxs(Text, { color: "gray", children: ["Stacks: ", stacks.length] }), _jsxs(Text, { color: "gray", children: ["Services: ", services.length] }), _jsxs(Text, { color: "gray", children: ["\uD83D\uDDB1\uFE0F ", mouseEnabled ? "ON" : "OFF", " \u2502 \u2139\uFE0F ", showTooltips ? "ON" : "OFF", " \u2502", _jsx(Text, { color: showEnabledOnly ? "green" : "yellow", children: showEnabledOnly ? "✓ enabled" : "✓ all" }), " │ ", "[?] Help \u2502 [q] Quit"] })] })] })] }))] }));
+    return (_jsxs(Box, { flexDirection: "column", height: stdout.rows || 24, children: [_jsx(Box, { paddingX: 1, paddingY: 0, children: _jsxs(Text, { children: [_jsxs(Text, { color: theme.accent, bold: true, children: [theme.bannerStart, " TDK NEON EDITION ", theme.bannerEnd] }), _jsx(Text, { color: theme.muted, children: theme.ascii ? " | " : " │ " }), _jsx(Text, { color: theme.foreground, children: projectRoot }), _jsx(Text, { color: theme.muted, children: theme.ascii ? " | " : " │ " }), _jsxs(Text, { color: theme.success, children: [services.length, " services ready"] })] }) }), _jsx(Box, { paddingX: 1, children: _jsx(Text, { color: theme.muted, children: (theme.ascii ? "-" : "─").repeat(compact ? 60 : Math.min(terminalWidth - 4, 100)) }) }), isSearching && (_jsxs(Box, { paddingX: 1, height: 1, children: [_jsxs(Text, { color: theme.warning, children: ["Search: ", searchQuery, "_"] }), searchStatus && (_jsx(Text, { color: theme.muted, dimColor: theme.dimMuted, children: `   ${searchStatus.summary}` }))] })), searchStatus?.emptyMessage && (_jsx(Box, { paddingX: 1, height: 1, children: _jsx(Text, { color: theme.muted, children: searchStatus.emptyMessage }) })), !isSearching && message && (_jsx(Box, { paddingX: 1, height: 1, children: _jsxs(Text, { color: theme.accent, children: [theme.bannerStart, " ", message, " ", theme.bannerEnd] }) })), !isSearching && !message && showTooltips && !showHelp && (_jsx(Box, { paddingX: 1, height: 1, children: _jsx(Text, { color: theme.muted, dimColor: theme.dimMuted, children: helpHint }) })), showHelp && (_jsx(Box, { paddingX: 1, flexGrow: 1, children: _jsx(HelpPanel, { onClose: () => setShowHelp(false) }) })), !showHelp && (_jsxs(_Fragment, { children: [_jsx(Box, { marginTop: 1, children: _jsx(TabBar, { activeTab: activeTab, onTabChange: setActiveTab, compact: compactTabBar }) }), _jsxs(Box, { flexDirection: "row", paddingX: 1, flexGrow: 1, children: [_jsxs(Box, { flexDirection: "column", flexGrow: 1, width: showSidebar ? terminalWidth - 45 : terminalWidth - 4, children: [activeTab === "overview" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Stacks ]" : "┌─ Stacks ─" }) }), _jsx(Box, { marginTop: 1, flexGrow: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] })), activeTab === "resources" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Resources ]" : "┌─ Resources ─" }) }), selectedStackData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: theme.muted, children: ["Stack: ", selectedStackData.stack.name] }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceTable, { resources: selectedStackData.metadata.resources, maxWidth: terminalWidth - (showSidebar ? 50 : 10) }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.muted, children: "Select a stack to view resources" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] }))] })), activeTab === "events" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Events ]" : "┌─ Events ─" }) }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { color: theme.muted, children: "Events tab not yet implemented" }) })] })), activeTab === "files" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Autogenerated Files ]" : "┌─ Autogenerated Files ─" }) }), selectedServiceData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: theme.muted, children: ["Service: ", selectedServiceData.service.name] }), _jsx(Box, { marginTop: 1, children: _jsx(FileTree, { nodes: fileTreeNodes, selectedPath: selectedFile || undefined }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.muted, children: "Select a service to view files" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] }))] })), activeTab === "config" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Configuration ]" : "┌─ Configuration ─" }) }), selectedServiceData ? (_jsxs(Box, { marginTop: 1, flexDirection: "column", children: [_jsx(Text, { color: theme.accent, children: selectedServiceData.service.configPath }), _jsx(Box, { marginTop: 1, borderStyle: theme.ascii ? undefined : "single", borderColor: theme.border, paddingX: 1, children: _jsx(Text, { color: theme.muted, wrap: "wrap", children: JSON.stringify(selectedServiceData.service.config, null, 2).slice(0, 1000) }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.muted, children: "Select a service to view configuration" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex }) })] }))] }))] }), showSidebar && (_jsx(Box, { marginLeft: 2, children: _jsx(DetailPanel, { stack: selectedStackData?.stack || null, service: selectedServiceData?.service || null, stackMetadata: selectedStackData?.metadata || null, visible: !!selectedStack || !!selectedService }) }))] }), _jsxs(Box, { borderStyle: theme.ascii ? undefined : "single", borderColor: theme.border, paddingX: 1, height: 3, flexDirection: "column", marginTop: 1, children: [_jsxs(Box, { justifyContent: "space-between", children: [_jsxs(Text, { color: theme.accent, bold: true, children: [theme.bannerStart, " ", activeTab] }), _jsxs(Text, { color: theme.success, children: [theme.ascii ? "+" : "●", " ", services.filter((s) => s.stack).length, " in stack"] }), _jsxs(Text, { color: theme.warning, children: [theme.ascii ? "-" : "○", " ", services.filter((s) => !s.stack).length, " no stack"] })] }), _jsxs(Box, { justifyContent: "space-between", children: [_jsxs(Text, { color: theme.muted, children: ["Stacks: ", stacks.length] }), _jsxs(Text, { color: theme.muted, children: ["Services: ", services.length] }), _jsxs(Text, { color: theme.muted, children: [theme.ascii ? "Mouse" : "🖱️", " ", mouseEnabled ? "ON" : "OFF", " ", theme.ascii ? "|" : "│", " ", theme.ascii ? "Info" : "ℹ️", " ", showTooltips ? "ON" : "OFF", " ", theme.ascii ? "|" : "│", _jsx(Text, { color: showEnabledOnly ? theme.success : theme.warning, children: showEnabledOnly
+                                                    ? theme.ascii
+                                                        ? "[+] enabled"
+                                                        : "✓ enabled"
+                                                    : theme.ascii
+                                                        ? "[+] all"
+                                                        : "✓ all" }), theme.ascii ? " | " : " │ ", "[?] Help", theme.ascii ? " | " : " │ ", "[q] Quit"] })] })] })] }))] }));
 };
+const TUIRoot = ({ animated, highContrast, }) => (_jsx(TUIThemeContext.Provider, { value: createTUITheme(Boolean(highContrast)), children: _jsx(TUIApp, { animated: animated }) }));
 export const uiCommand = new Command("ui")
     .description("Interactive TUI for managing stacks and services (Neon Edition)")
     .alias("interactive")
@@ -457,6 +509,6 @@ export const uiCommand = new Command("ui")
         errorFactories.tiltNotInstalled().exit();
     }
     requireProjectRoot();
-    render(_jsx(TUIApp, { animated: options.animations }));
+    render(_jsx(TUIRoot, { animated: options.animations, highContrast: options.highContrast }));
 });
 //# sourceMappingURL=ui.js.map

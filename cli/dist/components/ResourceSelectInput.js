@@ -1,8 +1,10 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { Box, Text, useInput } from "ink";
 import { useEffect, useState } from "react";
+import { useTUITheme } from "./ui-theme.js";
 // Keys match what ink-select-input handled: up/down or k/j (wrapping), 1-9 to pick, Enter to select.
 export const ResourceSelectInput = ({ items, onSelect, highlightedIndex, }) => {
+    const theme = useTUITheme();
     const [selected, setSelected] = useState(() => Math.max(0, Math.min(highlightedIndex, items.length - 1)));
     const itemKeys = items.map((item) => item.value).join("\0");
     // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the item list changes
@@ -24,7 +26,7 @@ export const ResourceSelectInput = ({ items, onSelect, highlightedIndex, }) => {
     });
     return (_jsx(Box, { flexDirection: "column", children: items.map((item, index) => {
             const isSelected = index === selected;
-            return (_jsxs(Box, { children: [_jsx(Text, { color: isSelected ? "cyan" : undefined, children: isSelected ? "▓▒░ " : "    " }), _jsx(Text, { color: isSelected ? "cyan" : "white", bold: isSelected, backgroundColor: isSelected ? "black" : undefined, children: item.label })] }, item.value));
+            return (_jsxs(Box, { children: [_jsx(Text, { color: isSelected ? theme.selectedForeground : undefined, backgroundColor: isSelected ? theme.selectedBackground : undefined, children: isSelected ? `${theme.selectionMarker} ` : "    " }), _jsx(Text, { color: isSelected ? theme.selectedForeground : theme.foreground, bold: isSelected || theme.highContrast, backgroundColor: isSelected ? theme.selectedBackground : undefined, children: item.label })] }, item.value));
         }) }));
 };
 //# sourceMappingURL=ResourceSelectInput.js.map

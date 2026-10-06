@@ -1,6 +1,6 @@
-import { Box, Text, useInput } from "ink";
+import { Box, measureElement, Text, useInput } from "ink";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ResourceSelectInputProps } from "../types/index.js";
 import { useTUITheme } from "./ui-theme.js";
 
@@ -9,12 +9,19 @@ export const ResourceSelectInput: React.FC<ResourceSelectInputProps> = ({
   items,
   onSelect,
   highlightedIndex,
+  width,
+  onLayout,
 }) => {
   const theme = useTUITheme();
+  const listRef = useRef<Parameters<typeof measureElement>[0] | null>(null);
   const [selected, setSelected] = useState(() =>
     Math.max(0, Math.min(highlightedIndex, items.length - 1)),
   );
   const itemKeys = items.map((item) => item.value).join("\0");
+
+  useLayoutEffect(() => {
+    if (listRef.current) onLayout?.(measureElement(listRef.current).y);
+  });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the item list changes
   useEffect(() => setSelected(0), [itemKeys]);
@@ -31,23 +38,25 @@ export const ResourceSelectInput: React.FC<ResourceSelectInputProps> = ({
   });
 
   return (
-    <Box flexDirection="column">
+    <Box ref={listRef} flexDirection="column" width={width}>
       {items.map((item, index) => {
         const isSelected = index === selected;
         return (
-          <Box key={item.value}>
-            <Text
-              color={isSelected ? theme.selectedForeground : undefined}
-              backgroundColor={isSelected ? theme.selectedBackground : undefined}
-            >
-              {isSelected ? `${theme.selectionMarker} ` : "    "}
-            </Text>
-            <Text
-              color={isSelected ? theme.selectedForeground : theme.foreground}
-              bold={isSelected || theme.highContrast}
-              backgroundColor={isSelected ? theme.selectedBackground : undefined}
-            >
-              {item.label}
+          <Box key={item.value} width={width}>
+            <Text wrap="truncate-end">
+              <Text
+                color={isSelected ? theme.selectedForeground : theme.muted}
+                backgroundColor={isSelected ? theme.selectedBackground : undefined}
+              >
+                {isSelected ? `${theme.selectionMarker} ` : "    "}
+              </Text>
+              <Text
+                color={isSelected ? theme.selectedForeground : theme.foreground}
+                bold={isSelected || theme.highContrast}
+                backgroundColor={isSelected ? theme.selectedBackground : undefined}
+              >
+                {item.label}
+              </Text>
             </Text>
           </Box>
         );

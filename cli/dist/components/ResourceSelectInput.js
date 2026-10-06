@@ -1,12 +1,17 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { Box, Text, useInput } from "ink";
-import { useEffect, useState } from "react";
+import { Box, measureElement, Text, useInput } from "ink";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTUITheme } from "./ui-theme.js";
 // Keys match what ink-select-input handled: up/down or k/j (wrapping), 1-9 to pick, Enter to select.
-export const ResourceSelectInput = ({ items, onSelect, highlightedIndex, }) => {
+export const ResourceSelectInput = ({ items, onSelect, highlightedIndex, width, onLayout, }) => {
     const theme = useTUITheme();
+    const listRef = useRef(null);
     const [selected, setSelected] = useState(() => Math.max(0, Math.min(highlightedIndex, items.length - 1)));
     const itemKeys = items.map((item) => item.value).join("\0");
+    useLayoutEffect(() => {
+        if (listRef.current)
+            onLayout?.(measureElement(listRef.current).y);
+    });
     // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the item list changes
     useEffect(() => setSelected(0), [itemKeys]);
     useInput((input, key) => {
@@ -24,9 +29,9 @@ export const ResourceSelectInput = ({ items, onSelect, highlightedIndex, }) => {
         if (key.return)
             onSelect(items[selected]);
     });
-    return (_jsx(Box, { flexDirection: "column", children: items.map((item, index) => {
+    return (_jsx(Box, { ref: listRef, flexDirection: "column", width: width, children: items.map((item, index) => {
             const isSelected = index === selected;
-            return (_jsxs(Box, { children: [_jsx(Text, { color: isSelected ? theme.selectedForeground : undefined, backgroundColor: isSelected ? theme.selectedBackground : undefined, children: isSelected ? `${theme.selectionMarker} ` : "    " }), _jsx(Text, { color: isSelected ? theme.selectedForeground : theme.foreground, bold: isSelected || theme.highContrast, backgroundColor: isSelected ? theme.selectedBackground : undefined, children: item.label })] }, item.value));
+            return (_jsx(Box, { width: width, children: _jsxs(Text, { wrap: "truncate-end", children: [_jsx(Text, { color: isSelected ? theme.selectedForeground : theme.muted, backgroundColor: isSelected ? theme.selectedBackground : undefined, children: isSelected ? `${theme.selectionMarker} ` : "    " }), _jsx(Text, { color: isSelected ? theme.selectedForeground : theme.foreground, bold: isSelected || theme.highContrast, backgroundColor: isSelected ? theme.selectedBackground : undefined, children: item.label })] }) }, item.value));
         }) }));
 };
 //# sourceMappingURL=ResourceSelectInput.js.map

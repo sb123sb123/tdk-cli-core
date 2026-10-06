@@ -1,9 +1,10 @@
 import { renderToString } from "ink";
 import { createElement, Fragment } from "react";
 import { describe, expect, it } from "vitest";
-import { LoadingScreen, TUIHeader } from "../../commands/ui.js";
+import { LoadingScreen } from "../../commands/ui.js";
 import { FileTree } from "../FileTree.js";
 import { TabBar } from "../TabBar.js";
+import { TUIHeader } from "../TUIHeader.js";
 import { createTUITheme, TUIThemeContext } from "../ui-theme.js";
 
 describe("plain terminal theme", () => {
@@ -54,15 +55,16 @@ describe("plain terminal theme", () => {
         { value: theme },
         createElement(TUIHeader, {
           projectRoot: "example",
-          serviceCount: 2,
+          resourceCount: 2,
           terminalWidth: 80,
-          compact: false,
+          version: "1.0.0",
         }),
+        createElement(TabBar, { activeTab: "overview", onTabChange: () => {}, terminalWidth: 80 }),
       ),
       { columns: 80 },
     );
 
-    expect(output).toContain(">>> TDK NEON EDITION <<<");
+    expect(output).toContain(">>> TDK NEON EDITION v1.0.0 <<<");
     expect(output).toMatch(/-{10,}/);
     expect(output).not.toContain(String.fromCharCode(0x2500));
     expect(output).not.toContain(String.fromCharCode(27));

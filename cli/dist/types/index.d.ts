@@ -160,7 +160,7 @@ export interface ProjectConfig {
     discovery: ProjectDiscovery;
     overrides?: Record<string, JsonValue>;
 }
-export type TabId = "overview" | "resources" | "events" | "files" | "config";
+export type TabId = "overview" | "resources" | "files" | "config";
 export interface Tab {
     id: TabId;
     label: string;
@@ -186,11 +186,13 @@ export interface ResourceTableProps {
     maxWidth?: number;
 }
 export interface ResourceSelectInputProps {
+    isActive?: boolean;
+    maxVisibleItems?: number;
     items: SelectItem[];
     onSelect: (item: SelectItem) => void;
     highlightedIndex: number;
     width: number;
-    onLayout?: (listTop: number) => void;
+    onLayout?: (listTop: number, firstVisibleItem?: number) => void;
 }
 export interface FileNode {
     name: string;

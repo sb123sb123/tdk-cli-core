@@ -43,6 +43,7 @@ describe("tdk ui theme", () => {
       expect(theme.muted).toBeUndefined();
       expect(theme.dimMuted).toBe(false);
       expect(theme.ascii).toBe(true);
+      expect(theme.highContrast).toBe(false);
       expect(theme.bannerStart).toBe(">>>");
       expect(theme.bannerEnd).toBe("<<<");
       expect(theme.selectionMarker).toBe(">>>");

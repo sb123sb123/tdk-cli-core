@@ -77,7 +77,7 @@ export function createTUITheme(highContrast, environment = process.env) {
     return {
         ...palette,
         ...colorless,
-        highContrast,
+        highContrast: highContrast && !ascii,
         ascii,
         bannerStart: ascii ? ">>>" : "\u2593\u2592\u2591",
         bannerEnd: ascii ? "<<<" : "\u2591\u2592\u2593",

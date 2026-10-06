@@ -8,7 +8,9 @@ import {
   ResourceSelectInput,
   ResourceTable,
   TabBar,
+  TUIHeader,
 } from "../components/index.js";
+import { TABS } from "../components/TabBar.js";
 import { createTUITheme, TUIThemeContext, useTUITheme } from "../components/ui-theme.js";
 import type {
   DiscoveredResource,
@@ -21,7 +23,7 @@ import type {
   TabId,
 } from "../types/index.js";
 import { errorFactories, requireProjectRoot } from "../utils/errors.js";
-import { findProjectRoot } from "../utils/paths.js";
+import { findProjectRoot, getPackageVersion } from "../utils/paths.js";
 import { describeSearch } from "../utils/search-status.js";
 import {
   clearMetadataCache,
@@ -31,7 +33,7 @@ import {
   getStackMetadata,
 } from "../utils/services.js";
 import { createStatusMessageController } from "../utils/status-message.js";
-import { getListRowFromMouseY } from "../utils/terminal-layout.js";
+import { getListRowFromMouseY, getTerminalRuleWidth } from "../utils/terminal-layout.js";
 import { isTiltAvailable } from "../utils/tilt.js";
 
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
@@ -52,12 +54,19 @@ const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => {
         <Text bold underline color={theme.foreground}>
           Navigation
         </Text>
-        <Text>
-          {theme.ascii ? "[UP/DOWN] Navigate list items" : "\u2191/\u2193 Navigate list items"}
+        <Text color={theme.foreground}>
+          {theme.ascii
+            ? " [UP/DOWN] or j/k Navigate list items"
+            : " \u2191/\u2193 or j/k Navigate list items"}
         </Text>
+        <Text color={theme.foreground}> g/G or Home/End First/last item</Text>
+        <Text color={theme.foreground}> PgUp/PgDn Move one page</Text>
         <Text color={theme.foreground}> Enter Select item / Open detail</Text>
         <Text color={theme.foreground}> Tab Next tab</Text>
-        <Text color={theme.foreground}> 1-5 Direct tab access</Text>
+        <Text color={theme.foreground}>
+          {" "}
+          {TABS[0].shortcut}-{TABS[TABS.length - 1].shortcut} Direct tab access
+        </Text>
 
         <Box marginTop={1}>
           <Text bold underline color={theme.foreground}>
@@ -70,7 +79,9 @@ const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => {
         <Text color={theme.foreground}> r Refresh data</Text>
         <Text color={theme.foreground}> / Search/filter</Text>
         <Text color={theme.foreground}> ? Show this help</Text>
-        <Text>{theme.ascii ? "q Quit | Esc Back" : "q Quit \u2502 Esc Back"}</Text>
+        <Text color={theme.foreground}>
+          {theme.ascii ? " q Quit | Esc Back" : " q Quit \u2502 Esc Back"}
+        </Text>
       </Box>
       <Box marginTop={1}>
         <Text color={theme.muted} dimColor={theme.dimMuted}>
@@ -81,18 +92,7 @@ const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => {
   );
 };
 
-const SPINNER_FRAMES = [
-  "\u280B",
-  "\u2819",
-  "\u2839",
-  "\u2838",
-  "\u283C",
-  "\u2834",
-  "\u2826",
-  "\u2827",
-  "\u2807",
-  "\u280F",
-];
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const ASCII_SPINNER_FRAMES = ["-", "/", "|", "\\"];
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({
@@ -132,7 +132,7 @@ const ErrorScreen: React.FC<ErrorScreenProps> = ({ error, onRetry }) => {
       </Text>
       <Box marginY={1} />
       <Text color={theme.error}>
-        {theme.ascii ? "x" : "✗"} {error}
+        {theme.ascii ? "[x]" : "\u2717"} {error}
       </Text>
       <Box marginY={1} />
       <Text color={theme.muted}>Troubleshooting:</Text>
@@ -153,7 +153,7 @@ const EmptyState: React.FC<{ message?: string }> = ({ message }) => {
         No Services Found
       </Text>
       <Box marginY={1} />
-      <Text color={theme.muted}>{theme.ascii ? "[*]" : "◉"} No service.json files found</Text>
+      <Text color={theme.muted}>{theme.ascii ? "[*]" : "\u25c9"} No service.json files found</Text>
       <Box marginY={1} />
       <Text color={theme.foreground}>To get started:</Text>
       <Text color={theme.foreground}> 1. Run: tdk project</Text>
@@ -173,88 +173,7 @@ const EmptyState: React.FC<{ message?: string }> = ({ message }) => {
   );
 };
 
-/** Compose footer guidance for the current tab and terminal character set. */
-function createHelpHint(
-  activeTab: TabId,
-  selectedStack: string | null,
-  selectedService: string | null,
-  showEnabledOnly: boolean,
-  ascii: boolean,
-): string {
-  const separator = ascii ? " | " : " \u2502 ";
-  const enabledHint = `[e] ${showEnabledOnly ? "show all" : "enabled only"}`;
-  const common = [enabledHint, "[?] help"];
-
-  if (activeTab === "overview") {
-    const introduction = selectedStack
-      ? `Stack ${JSON.stringify(selectedStack)} selected. [Enter] view`
-      : `${ascii ? "[UP/DOWN]" : "[\u2191/\u2193]"} Navigate`;
-    const controls = selectedStack ? ["[Esc] back", ...common] : ["[Enter] Select", ...common];
-    return [introduction, ...controls].join(separator);
-  }
-
-  if (activeTab === "resources") {
-    return ["[Tab] Tabs", "[r] Refresh", "[/] Search", ...common].join(separator);
-  }
-
-  if (activeTab === "events") {
-    return ["Event timeline", "[Tab] Switch tabs", ...common].join(separator);
-  }
-
-  if (activeTab === "files" && selectedService) {
-    return [`Service ${JSON.stringify(selectedService)}`, "[Esc] Back", ...common].join(separator);
-  }
-
-  if (activeTab === "files") {
-    return ["Select service to view files", ...common].join(separator);
-  }
-
-  if (activeTab === "config") {
-    return ["View configurations", ...common].join(separator);
-  }
-
-  return ["[Tab] Next", "[1-5] Tabs", ...common, "[q] Quit"].join(separator);
-}
-
-type TUIHeaderProps = {
-  projectRoot: string;
-  serviceCount: number;
-  terminalWidth: number;
-  compact: boolean;
-};
-
-/** Render the TUI banner and width-aware separator. */
-export const TUIHeader: React.FC<TUIHeaderProps> = ({
-  projectRoot,
-  serviceCount,
-  terminalWidth,
-  compact,
-}) => {
-  const theme = useTUITheme();
-  return (
-    <>
-      <Box paddingX={1} paddingY={0}>
-        <Text>
-          <Text color={theme.accent} bold>
-            {theme.bannerStart} TDK NEON EDITION {theme.bannerEnd}
-          </Text>
-          <Text color={theme.muted}>{theme.ascii ? " | " : " \u2502 "}</Text>
-          <Text color={theme.foreground}>{projectRoot}</Text>
-          <Text color={theme.muted}>{theme.ascii ? " | " : " \u2502 "}</Text>
-          <Text color={theme.success}>{serviceCount} services ready</Text>
-        </Text>
-      </Box>
-
-      <Box paddingX={1}>
-        <Text color={theme.muted}>
-          {(theme.ascii ? "-" : "\u2500").repeat(compact ? 60 : Math.min(terminalWidth - 4, 100))}
-        </Text>
-      </Box>
-    </>
-  );
-};
-
-const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
+export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   const theme = useTUITheme();
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -269,9 +188,17 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   const [isSearching, setIsSearching] = useState(false);
 
   const [terminalWidth, setTerminalWidth] = useState(stdout.columns || 120);
+  const [terminalRows, setTerminalRows] = useState(stdout.rows || 24);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [mouseEnabled, setMouseEnabled] = useState(true);
   const [listTop, setListTop] = useState<number | null>(null);
+  const [listStart, setListStart] = useState(0);
+  // Reserve the header, tab bar, hints and footer; keep the cursor visible.
+  const pageSize = Math.max(1, terminalRows - 14);
+  const handleListLayout = useCallback((top: number, firstVisible = 0): void => {
+    setListTop(top);
+    setListStart(firstVisible);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTooltips, setShowTooltips] = useState(true);
@@ -410,7 +337,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
     return [];
   }, [activeTab, filteredStacks, filteredServices, selectedStackData, selectedServiceData]);
 
-  const items = getItems();
+  const items = useMemo(getItems, [getItems]);
   const selectableListVisible =
     !loading &&
     !error &&
@@ -504,9 +431,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
           const listRow =
             selectableListVisible && listTop !== null ? getListRowFromMouseY(y, listTop) : -1;
 
-          if (listRow >= 0 && listRow < items.length) {
-            setHighlightedIndex(listRow);
-            const item = items[listRow];
+          const itemIndex = listStart + listRow;
+          if (listRow >= 0 && listRow < pageSize && itemIndex < items.length) {
+            setHighlightedIndex(itemIndex);
+            const item = items[itemIndex];
             if (item) {
               handleSelect(item);
             }
@@ -521,11 +449,21 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
       stdin.off("data", handleMouseData);
       stdin.removeAllListeners("data");
     };
-  }, [stdin, items, listTop, selectableListVisible, mouseEnabled, handleSelect]);
+  }, [
+    stdin,
+    items,
+    listTop,
+    listStart,
+    pageSize,
+    selectableListVisible,
+    mouseEnabled,
+    handleSelect,
+  ]);
 
   const handleResize = useCallback(() => {
     setTerminalWidth(stdout.columns || 120);
-  }, [stdout.columns]);
+    setTerminalRows(stdout.rows || 24);
+  }, [stdout]);
 
   useEffect(() => {
     stdout.on("resize", handleResize);
@@ -645,7 +583,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
     }
 
     if (key.tab) {
-      const tabs: TabId[] = ["overview", "resources", "events", "files", "config"];
+      const tabs = TABS.map((tab) => tab.id);
       const currentIdx = tabs.indexOf(activeTab);
       const nextIdx = key.shift
         ? (currentIdx - 1 + tabs.length) % tabs.length
@@ -654,24 +592,24 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
       return;
     }
 
-    if (/^[1-5]$/.test(input)) {
-      const tabMap: Record<string, TabId> = {
-        "1": "overview",
-        "2": "resources",
-        "3": "events",
-        "4": "files",
-        "5": "config",
-      };
-      setActiveTab(tabMap[input]);
+    const shortcutTab = TABS.find((tab) => tab.shortcut === input);
+    if (shortcutTab) {
+      setActiveTab(shortcutTab.id);
       return;
     }
 
-    if (key.upArrow) {
+    const plainKey = !key.ctrl && !key.meta;
+    if (items.length > 0 && (key.upArrow || (plainKey && input === "k"))) {
       setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
     }
-    if (key.downArrow) {
+    if (items.length > 0 && (key.downArrow || (plainKey && input === "j"))) {
       setHighlightedIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
     }
+    if (key.home || (plainKey && input === "g")) setHighlightedIndex(0);
+    if (key.end || (plainKey && input === "G")) setHighlightedIndex(Math.max(0, items.length - 1));
+    if (key.pageUp) setHighlightedIndex((prev) => Math.max(0, prev - pageSize));
+    if (key.pageDown)
+      setHighlightedIndex((prev) => Math.min(Math.max(0, items.length - 1), prev + pageSize));
     if (key.return || input === " ") {
       const currentItem = items[highlightedIndex];
       if (currentItem) {
@@ -708,14 +646,6 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   }, [selectedServiceData, services]);
 
   const showSidebar = terminalWidth > 100;
-  const compact = terminalWidth < 80;
-  const helpHint = createHelpHint(
-    activeTab,
-    selectedStack,
-    selectedService,
-    showEnabledOnly,
-    theme.ascii,
-  );
   const mainPanelWidth = showSidebar ? terminalWidth - 45 : terminalWidth - 4;
 
   if (loading) {
@@ -726,18 +656,35 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
     return <ErrorScreen error={error} onRetry={refresh} />;
   }
 
+  const header = (
+    <>
+      <TUIHeader
+        projectRoot={projectRoot}
+        resourceCount={services.length}
+        terminalWidth={terminalWidth}
+        version={getPackageVersion()}
+      />
+
+      <Box paddingX={1}>
+        <Text color={theme.muted}>
+          {(theme.ascii ? "-" : "\u2500").repeat(getTerminalRuleWidth(terminalWidth))}
+        </Text>
+      </Box>
+    </>
+  );
+
   if (services.length === 0) {
-    return <EmptyState message={message} />;
+    return (
+      <Box flexDirection="column" height={stdout.rows || 24}>
+        {header}
+        <EmptyState message={message} />
+      </Box>
+    );
   }
 
   return (
     <Box flexDirection="column" height={stdout.rows || 24}>
-      <TUIHeader
-        projectRoot={projectRoot}
-        serviceCount={services.length}
-        terminalWidth={terminalWidth}
-        compact={compact}
-      />
+      {header}
 
       {isSearching && (
         <Box paddingX={1} height={1}>
@@ -768,7 +715,13 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
       {!isSearching && !message && showTooltips && !showHelp && (
         <Box paddingX={1} height={1}>
           <Text color={theme.muted} dimColor={theme.dimMuted}>
-            {helpHint}
+            {createHelpHint(
+              activeTab,
+              selectedStack,
+              selectedService,
+              showEnabledOnly,
+              theme.ascii,
+            )}
           </Text>
         </Box>
       )}
@@ -803,8 +756,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                       items={items}
                       onSelect={handleSelect}
                       highlightedIndex={highlightedIndex}
+                      isActive={!isSearching}
+                      maxVisibleItems={pageSize}
                       width={mainPanelWidth}
-                      onLayout={setListTop}
+                      onLayout={handleListLayout}
                     />
                   </Box>
                 </>
@@ -835,25 +790,14 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          isActive={!isSearching}
+                          maxVisibleItems={pageSize}
                           width={mainPanelWidth}
-                          onLayout={setListTop}
+                          onLayout={handleListLayout}
                         />
                       </Box>
                     </>
                   )}
-                </>
-              )}
-
-              {activeTab === "events" && (
-                <>
-                  <Box marginBottom={1}>
-                    <Text bold color={theme.muted}>
-                      {theme.ascii ? "[ Events ]" : "┌─ Events ─"}
-                    </Text>
-                  </Box>
-                  <Box marginTop={1}>
-                    <Text color={theme.muted}>Events tab not yet implemented</Text>
-                  </Box>
                 </>
               )}
 
@@ -879,8 +823,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          isActive={!isSearching}
+                          maxVisibleItems={pageSize}
                           width={mainPanelWidth}
-                          onLayout={setListTop}
+                          onLayout={handleListLayout}
                         />
                       </Box>
                     </>
@@ -900,8 +846,9 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                       <Text color={theme.accent}>{selectedServiceData.service.configPath}</Text>
                       <Box
                         marginTop={1}
-                        borderStyle={theme.ascii ? undefined : "single"}
-                        borderColor={theme.border}
+                        {...(theme.ascii
+                          ? {}
+                          : { borderStyle: "single" as const, borderColor: theme.border })}
                         paddingX={1}
                       >
                         <Text color={theme.muted} wrap="wrap">
@@ -920,8 +867,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          isActive={!isSearching}
+                          maxVisibleItems={pageSize}
                           width={mainPanelWidth}
-                          onLayout={setListTop}
+                          onLayout={handleListLayout}
                         />
                       </Box>
                     </>
@@ -943,8 +892,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
           </Box>
 
           <Box
-            borderStyle={theme.ascii ? undefined : "single"}
-            borderColor={theme.border}
+            {...(theme.ascii ? {} : { borderStyle: "single" as const, borderColor: theme.border })}
             paddingX={1}
             height={3}
             flexDirection="column"
@@ -955,11 +903,11 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                 {theme.bannerStart} {activeTab}
               </Text>
               <Text color={theme.success}>
-                {theme.ascii ? "+" : "●"}{" "}
+                {theme.ascii ? "[+]" : "\u25cf"}{" "}
                 {services.filter((s: DiscoveredResource) => s.stack).length} in stack
               </Text>
               <Text color={theme.warning}>
-                {theme.ascii ? "-" : "○"}{" "}
+                {theme.ascii ? "-" : "\u25cb"}{" "}
                 {services.filter((s: DiscoveredResource) => !s.stack).length} no stack
               </Text>
             </Box>
@@ -967,20 +915,21 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
               <Text color={theme.muted}>Stacks: {stacks.length}</Text>
               <Text color={theme.muted}>Services: {services.length}</Text>
               <Text color={theme.muted}>
-                {theme.ascii ? "Mouse" : "🖱️"} {mouseEnabled ? "ON" : "OFF"}{" "}
-                {theme.ascii ? "|" : "│"} {theme.ascii ? "Info" : "ℹ️"} {showTooltips ? "ON" : "OFF"}{" "}
-                {theme.ascii ? "|" : "│"}
+                {theme.ascii ? "Mouse" : "🖱️"} {mouseEnabled ? "ON" : "OFF"}
+                {theme.ascii ? " | " : " \u2502 "}
+                {theme.ascii ? "Info" : "ℹ️"} {showTooltips ? "ON" : "OFF"}
+                {theme.ascii ? " | " : " \u2502 "}
                 <Text color={showEnabledOnly ? theme.success : theme.warning}>
                   {showEnabledOnly
                     ? theme.ascii
                       ? "[+] enabled"
-                      : "✓ enabled"
+                      : "\u2713 enabled"
                     : theme.ascii
                       ? "[+] all"
-                      : "✓ all"}
+                      : "\u2713 all"}
                 </Text>
-                {theme.ascii ? " | " : " │ "}
-                [?] Help{theme.ascii ? " | " : " │ "}[q] Quit
+                {theme.ascii ? " | " : " \u2502 "}
+                [?] Help{theme.ascii ? " | " : " \u2502 "}[q] Quit
               </Text>
             </Box>
           </Box>
@@ -989,6 +938,41 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
     </Box>
   );
 };
+
+/** Compose footer guidance for the current tab and terminal character set. */
+function createHelpHint(
+  activeTab: TabId,
+  selectedStack: string | null,
+  selectedService: string | null,
+  showEnabledOnly: boolean,
+  ascii: boolean,
+): string {
+  const separator = ascii ? " | " : " \u2502 ";
+  const enabledHint = `[e] ${showEnabledOnly ? "show all" : "enabled only"}`;
+  const common = [enabledHint, "[?] help"];
+  const tabRange = `${TABS[0].shortcut}-${TABS[TABS.length - 1].shortcut}`;
+
+  if (activeTab === "overview") {
+    const introduction = selectedStack
+      ? `Stack "${selectedStack}" selected. [Enter] view`
+      : `${ascii ? "[UP/DOWN]" : "[\u2191/\u2193]"} Navigate`;
+    const controls = selectedStack ? ["[Esc] back", ...common] : ["[Enter] Select", ...common];
+    return [introduction, ...controls].join(separator);
+  }
+  if (activeTab === "resources") {
+    return ["[Tab] Tabs", "[r] Refresh", "[/] Search", ...common].join(separator);
+  }
+  if (activeTab === "files" && selectedService) {
+    return [`Service "${selectedService}"`, "[Esc] Back", ...common].join(separator);
+  }
+  if (activeTab === "files") {
+    return ["Select service to view files", ...common].join(separator);
+  }
+  if (activeTab === "config") {
+    return ["View configurations", ...common].join(separator);
+  }
+  return ["[Tab] Next", `[${tabRange}] Tabs`, ...common, "[q] Quit"].join(separator);
+}
 
 const TUIRoot: React.FC<{ animated?: boolean; highContrast?: boolean }> = ({
   animated,
@@ -1012,6 +996,7 @@ export const uiCommand = new Command("ui")
     }
 
     requireProjectRoot();
+    // The app has no Static content, so its live layout starts at row 1 in the alternate screen.
     render(<TUIRoot animated={options.animations} highContrast={options.highContrast} />, {
       alternateScreen: true,
     });

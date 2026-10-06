@@ -38,11 +38,19 @@ export class TdkError extends Error {
   }
 }
 
-function closestNameSuggestions(names: readonly string[], candidates: readonly string[]): string[] {
+function closestNameSuggestions(
+  names: readonly string[],
+  candidates: readonly string[],
+  includeInput = false,
+): string[] {
   const suggestions = new Set<string>();
   for (const name of names) {
     const closest = suggestClosest(name, candidates);
-    if (closest) suggestions.add(`Did you mean "${closest}"?`);
+    if (closest) {
+      suggestions.add(
+        includeInput ? `Did you mean "${closest}" for "${name}"?` : `Did you mean "${closest}"?`,
+      );
+    }
   }
   return [...suggestions];
 }
@@ -81,15 +89,7 @@ export const errorFactories = {
     ]),
   unknownServices: (names: readonly string[], validNames: readonly string[]) => {
     // Service selectors are Tilt resource names, so share the resource suggestion path.
-    const suggestions = [
-      ...new Set(
-        names.flatMap((name) =>
-          errorFactories
-            .resourceNotFound(name, validNames)
-            .suggestions.filter((suggestion) => suggestion.startsWith("Did you mean ")),
-        ),
-      ),
-    ];
+    const suggestions = closestNameSuggestions(names, validNames, names.length > 1);
     return new TdkError(
       `Unknown service ${names.join(", ")}. Valid names: ${validNames.join(", ")}`,
       suggestions,

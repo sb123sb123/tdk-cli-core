@@ -42,6 +42,14 @@ describe("not-found error suggestions", () => {
     expect(error.suggestions).toEqual(['Did you mean "widget"?']);
   });
 
+  it("pairs each suggestion with its unknown service", () => {
+    const error = errorFactories.unknownServices(["widgt", "widge"], ["widget"]);
+
+    expect(error.suggestions).toEqual([
+      'Did you mean "widget" for "widgt"?',
+      'Did you mean "widget" for "widge"?',
+    ]);
+  });
   it("preserves usage exit codes in machine-readable errors", () => {
     const error = errorFactories.unknownServices(["widgt"], ["widget"]);
 

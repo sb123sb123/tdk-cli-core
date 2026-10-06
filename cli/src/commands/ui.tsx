@@ -1012,5 +1012,7 @@ export const uiCommand = new Command("ui")
     }
 
     requireProjectRoot();
-    render(<TUIRoot animated={options.animations} highContrast={options.highContrast} />);
+    render(<TUIRoot animated={options.animations} highContrast={options.highContrast} />, {
+      alternateScreen: true,
+    });
   });

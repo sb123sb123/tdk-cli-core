@@ -518,6 +518,8 @@ export const uiCommand = new Command("ui")
         errorFactories.tiltNotInstalled().exit();
     }
     requireProjectRoot();
-    render(_jsx(TUIRoot, { animated: options.animations, highContrast: options.highContrast }));
+    render(_jsx(TUIRoot, { animated: options.animations, highContrast: options.highContrast }), {
+        alternateScreen: true,
+    });
 });
 //# sourceMappingURL=ui.js.map

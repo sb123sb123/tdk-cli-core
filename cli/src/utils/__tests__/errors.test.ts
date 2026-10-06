@@ -42,6 +42,12 @@ describe("not-found error suggestions", () => {
     expect(error.suggestions).toEqual(['Did you mean "widget"?']);
   });
 
+  it("preserves usage exit codes in machine-readable errors", () => {
+    const error = errorFactories.unknownServices(["widgt"], ["widget"]);
+
+    expect(toMachineError(error).exitCode).toBe(2);
+  });
+
   it("preserves suggestions in machine-readable errors", () => {
     const error = errorFactories.stackNotFound("shp", ["shop"]);
 

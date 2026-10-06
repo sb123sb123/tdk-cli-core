@@ -372,6 +372,48 @@ describe("bring-your-own resource type", () => {
     }
   });
 
+  it("emits stack suggestions in JSON errors from up", async () => {
+    await createByo();
+    const originalAllowNativeWindows = process.env.TDK_ALLOW_NATIVE_WINDOWS;
+    process.env.TDK_ALLOW_NATIVE_WINDOWS = "1";
+    const emitted: Array<{ data: Record<string, unknown>; errors?: unknown[] }> = [];
+    const emit = (data: Record<string, unknown>, errors?: unknown[]) => {
+      emitted.push({ data, errors });
+    };
+    jsonOutput.createJsonEmitter.mockReturnValue(emit as never);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit");
+    }) as never);
+
+    try {
+      for (const args of [
+        ["shp", "--dry-run", "--json"],
+        ["shp", "--only", "widget", "--dry-run", "--json"],
+      ]) {
+        emitted.length = 0;
+        exit.mockClear();
+        clearDiscoveryCache();
+        await upCommand.parseAsync(["node", "tdk", ...args], { from: "node" }).catch(() => {});
+        expect(exit).toHaveBeenCalledWith(1);
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0]?.data).toEqual({ ok: false });
+        expect(emitted[0]?.errors?.[0]).toMatchObject({
+          code: "COMMAND_FAILED",
+          message: 'Stack "shp" not found',
+          suggestions: expect.arrayContaining(['Did you mean "shop"?']),
+        });
+      }
+    } finally {
+      error.mockRestore();
+      exit.mockRestore();
+      jsonOutput.createJsonEmitter.mockReset();
+      if (originalAllowNativeWindows === undefined) delete process.env.TDK_ALLOW_NATIVE_WINDOWS;
+      else process.env.TDK_ALLOW_NATIVE_WINDOWS = originalAllowNativeWindows;
+      clearDiscoveryCache();
+    }
+  });
+
   it("emits stack suggestions in JSON errors from resources and networks", async () => {
     await createByo();
     const output: string[] = [];

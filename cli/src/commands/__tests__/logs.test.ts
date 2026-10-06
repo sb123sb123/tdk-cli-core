@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { errorFactories } from "../../utils/errors.js";
 
 const tilt = vi.hoisted(() => ({
   isTiltAvailable: vi.fn(async () => true),
@@ -87,6 +88,15 @@ describe("tdk logs --json", () => {
     });
     expect(envelope.errors[0].message).toContain("api, web");
     expect(tilt.runTilt).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the resource-not-found factory for an unknown Tilt resource", async () => {
+    tilt.runTilt.mockResolvedValueOnce(resources("api", "web"));
+    const factory = vi.spyOn(errorFactories, "resourceNotFound");
+    const { envelope, code } = await run("-s", "aip");
+    expect(code).toBe(2);
+    expect(envelope.errors[0].suggestions).toContain('Did you mean "api"?');
+    expect(factory).toHaveBeenCalledWith("aip", ["api", "web"]);
   });
 
   it("renders close resource suggestions in text errors", async () => {

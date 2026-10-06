@@ -19,7 +19,7 @@ export function createMachineEnvelope<T>(
   return { schemaVersion: 1, data, errors };
 }
 
-export function toMachineError(error: unknown): { error: MachineError; exitCode: 1 | 2 } {
+export function toMachineError(error: unknown): { error: MachineError; exitCode: number } {
   if (error instanceof TdkError) {
     return {
       error: {
@@ -27,7 +27,7 @@ export function toMachineError(error: unknown): { error: MachineError; exitCode:
         message: error.message,
         ...(error.suggestions.length > 0 ? { suggestions: error.suggestions } : {}),
       },
-      exitCode: 1,
+      exitCode: error.exitCode,
     };
   }
   return {

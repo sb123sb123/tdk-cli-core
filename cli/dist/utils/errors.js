@@ -67,7 +67,15 @@ export const errorFactories = {
         "Run `tdk resources` to list all resources",
         "Check the resource name spelling",
     ]),
-    unknownServices: (names, validNames) => new TdkError(`Unknown service ${names.join(", ")}. Valid names: ${validNames.join(", ")}`, closestNameSuggestions(names, validNames), 2),
+    unknownServices: (names, validNames) => {
+        // Service selectors are Tilt resource names, so share the resource suggestion path.
+        const suggestions = [
+            ...new Set(names.flatMap((name) => errorFactories
+                .resourceNotFound(name, validNames)
+                .suggestions.filter((suggestion) => suggestion.startsWith("Did you mean ")))),
+        ];
+        return new TdkError(`Unknown service ${names.join(", ")}. Valid names: ${validNames.join(", ")}`, suggestions, 2);
+    },
     directoryExists: (path) => new TdkError(`Directory already exists: ${path}`, [
         "Use `--path` to specify a different location",
         "Remove the existing directory if no longer needed",

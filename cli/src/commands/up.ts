@@ -32,6 +32,7 @@ import {
 } from "../utils/host-port-config.js";
 import { formatHostPortPlan } from "../utils/host-port-plan.js";
 import { createJsonEmitter } from "../utils/json-output.js";
+import { toMachineError } from "../utils/machine-output.js";
 import { findProjectRoot, getPackageVersion } from "../utils/paths.js";
 import { findAvailablePort } from "../utils/port-assignment.js";
 import { isApiServiceType } from "../utils/resource-kind.js";
@@ -238,8 +239,11 @@ export const upCommand = new Command("up")
       const discoveredStackNames = discoveredStacks.map((stack) => stack.name);
       // Reject a bad request before anything below can write to the project (.env, runtime assets, .tdk/project.json).
       if (options.only) {
-        if (stackName && !stackExists(stackName))
-          errorFactories.stackNotFound(stackName, discoveredStackNames).exit();
+        if (stackName && !stackExists(stackName)) {
+          const error = errorFactories.stackNotFound(stackName, discoveredStackNames);
+          emit?.({ ok: false }, [toMachineError(error).error]);
+          error.exit();
+        }
         const candidates = stackName
           ? discoveredResources.filter((resource) => resource.stack === stackName)
           : discoveredResources;
@@ -303,7 +307,9 @@ export const upCommand = new Command("up")
       if (stackName) {
         servicesToStart = discoveredResources.filter((resource) => resource.stack === stackName);
         if (servicesToStart.length === 0) {
-          errorFactories.stackNotFound(stackName, discoveredStackNames).exit();
+          const error = errorFactories.stackNotFound(stackName, discoveredStackNames);
+          emit?.({ ok: false }, [toMachineError(error).error]);
+          error.exit();
         }
 
         focusServiceNames = servicesToStart.map((s) => s.name);

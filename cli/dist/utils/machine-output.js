@@ -10,7 +10,7 @@ export function toMachineError(error) {
                 message: error.message,
                 ...(error.suggestions.length > 0 ? { suggestions: error.suggestions } : {}),
             },
-            exitCode: 1,
+            exitCode: error.exitCode,
         };
     }
     return {

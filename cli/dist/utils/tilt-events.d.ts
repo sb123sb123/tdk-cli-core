@@ -17,6 +17,10 @@ export interface TiltEventSnapshot {
     resources: TiltResourceSummary[];
     events: TiltTimelineEvent[];
 }
+export declare class TiltEventsLoadError extends Error {
+    readonly kind: "unavailable" | "error";
+    constructor(message: string, kind: "unavailable" | "error");
+}
 export declare function parseTiltUiResourceList(value: unknown): TiltEventSnapshot;
 export declare function loadTiltEvents(): Promise<TiltEventSnapshot>;
 //# sourceMappingURL=tilt-events.d.ts.map

@@ -1,5 +1,17 @@
-import { describe, expect, it } from "vitest";
-import { parseTiltUiResourceList } from "../../utils/tilt-events.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  loadTiltEvents,
+  parseTiltUiResourceList,
+  TiltEventsLoadError,
+} from "../../utils/tilt-events.js";
+
+const { runTiltMock } = vi.hoisted(() => ({ runTiltMock: vi.fn() }));
+vi.mock("../../utils/tilt.js", () => ({ runTilt: runTiltMock }));
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  runTiltMock.mockReset();
+});
 
 describe("Tilt UIResource event timeline", () => {
   it("maps build history, the current build, and resource status into newest-first events", () => {
@@ -64,5 +76,88 @@ describe("Tilt UIResource event timeline", () => {
 
   it("rejects malformed UIResource responses", () => {
     expect(() => parseTiltUiResourceList({ items: {} })).toThrow("invalid UIResource list");
+  });
+});
+
+describe("Tilt event ordering and duplicate status", () => {
+  it("keeps running events first and assigns unique IDs to repeated conditions", () => {
+    const result = parseTiltUiResourceList({
+      items: [
+        {
+          metadata: { name: "api" },
+          status: {
+            currentBuild: {},
+            buildHistory: [{ spanID: "timed", finishTime: "2026-10-07T12:00:00Z" }],
+            conditions: [
+              { type: "Ready", status: "False" },
+              { type: "Ready", status: "False" },
+            ],
+          },
+        },
+      ],
+    });
+    expect(result.events.map((event) => event.kind)).toEqual([
+      "running",
+      "success",
+      "warning",
+      "warning",
+    ]);
+    expect(new Set(result.events.map((event) => event.id)).size).toBe(4);
+  });
+
+  it("does not repeat a successful build as a deployment at the same time", () => {
+    const result = parseTiltUiResourceList({
+      items: [
+        {
+          metadata: { name: "api" },
+          status: {
+            lastDeployTime: "2026-10-07T12:00:00Z",
+            buildHistory: [{ spanID: "build", finishTime: "2026-10-07T12:00:00Z" }],
+          },
+        },
+      ],
+    });
+    expect(result.events.map((event) => event.title)).toEqual(["Build completed"]);
+  });
+});
+
+describe("loadTiltEvents", () => {
+  it("uses the configured Tilt UI port", async () => {
+    vi.stubEnv("TILT_PORT", "14999");
+    runTiltMock.mockResolvedValue({ exitCode: 0, stdout: '{"items":[]}', stderr: "" });
+    await expect(loadTiltEvents()).resolves.toEqual({ resources: [], events: [] });
+    expect(runTiltMock).toHaveBeenCalledWith(
+      "get",
+      ["uiresources", "-o", "json", "--port", "14999"],
+      { inheritStdio: false, timeoutMs: 10_000 },
+    );
+  });
+
+  it("classifies a missing Tilt executable and connection failure as unavailable", async () => {
+    runTiltMock.mockRejectedValue(new Error("Failed to spawn tilt: spawn tilt ENOENT"));
+    await expect(loadTiltEvents()).rejects.toMatchObject({ kind: "unavailable" });
+    runTiltMock.mockReset().mockResolvedValue({
+      exitCode: 1,
+      stdout: "",
+      stderr: "could not connect to Tilt: connection refused",
+    });
+    await expect(loadTiltEvents()).rejects.toMatchObject({
+      kind: "unavailable",
+      message: "could not connect to Tilt: connection refused",
+    });
+  });
+
+  it("preserves command and JSON errors instead of reporting Tilt as unavailable", async () => {
+    runTiltMock.mockResolvedValue({ exitCode: 2, stdout: "", stderr: "unknown flag: --port" });
+    await expect(loadTiltEvents()).rejects.toBeInstanceOf(TiltEventsLoadError);
+    await expect(loadTiltEvents()).rejects.toMatchObject({
+      kind: "error",
+      message: "unknown flag: --port",
+    });
+    runTiltMock.mockResolvedValue({ exitCode: 0, stdout: "{bad json", stderr: "" });
+    await expect(loadTiltEvents()).rejects.toMatchObject({
+      kind: "error",
+      message: "Tilt returned invalid UIResource JSON",
+    });
   });
 });

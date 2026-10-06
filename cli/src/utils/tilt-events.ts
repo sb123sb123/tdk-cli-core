@@ -1,3 +1,4 @@
+import type { TiltCommandResult } from "../types/index.js";
 import { STANDARD_PORTS } from "./constants.js";
 import { runTilt } from "./tilt.js";
 
@@ -23,6 +24,16 @@ export interface TiltTimelineEvent {
 export interface TiltEventSnapshot {
   resources: TiltResourceSummary[];
   events: TiltTimelineEvent[];
+}
+
+export class TiltEventsLoadError extends Error {
+  constructor(
+    message: string,
+    readonly kind: "unavailable" | "error",
+  ) {
+    super(message);
+    this.name = "TiltEventsLoadError";
+  }
 }
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -96,7 +107,15 @@ export function parseTiltUiResourceList(value: unknown): TiltEventSnapshot {
       });
     }
     const lastDeployTime = readString(status?.lastDeployTime);
-    if (lastDeployTime) {
+    const deployTimestamp = lastDeployTime ? Date.parse(lastDeployTime) : Number.NaN;
+    const matchingBuild = events.some(
+      (event) =>
+        event.resourceName === resourceName &&
+        event.kind === "success" &&
+        event.occurredAt !== undefined &&
+        Date.parse(event.occurredAt) === deployTimestamp,
+    );
+    if (lastDeployTime && !matchingBuild) {
       events.push({
         id: `${resourceName}:last-deploy`,
         resourceName,
@@ -119,7 +138,7 @@ export function parseTiltUiResourceList(value: unknown): TiltEventSnapshot {
         .filter((entry): entry is string => Boolean(entry))
         .join(": ");
       events.push({
-        id: `${resourceName}:condition:${type ?? String(conditionIndex)}`,
+        id: `${resourceName}:condition:${conditionIndex}:${type ?? "status"}`,
         resourceName,
         kind: state === "False" ? "warning" : "status",
         title: `Condition ${type ?? "status"}${state ? `: ${state}` : ""}`,
@@ -130,12 +149,14 @@ export function parseTiltUiResourceList(value: unknown): TiltEventSnapshot {
   }
 
   events.sort((left, right) => {
+    if (left.kind === "running" && right.kind !== "running") return -1;
+    if (right.kind === "running" && left.kind !== "running") return 1;
     const leftTime = left.occurredAt ? Date.parse(left.occurredAt) : Number.NaN;
     const rightTime = right.occurredAt ? Date.parse(right.occurredAt) : Number.NaN;
     if (Number.isNaN(leftTime)) {
-      return Number.isNaN(rightTime) ? left.resourceName.localeCompare(right.resourceName) : -1;
+      return Number.isNaN(rightTime) ? left.resourceName.localeCompare(right.resourceName) : 1;
     }
-    if (Number.isNaN(rightTime)) return 1;
+    if (Number.isNaN(rightTime)) return -1;
     return rightTime - leftTime;
   });
   return { resources, events };
@@ -143,10 +164,44 @@ export function parseTiltUiResourceList(value: unknown): TiltEventSnapshot {
 
 export async function loadTiltEvents(): Promise<TiltEventSnapshot> {
   const port = process.env.TILT_PORT ?? String(STANDARD_PORTS.tiltUi);
-  const result = await runTilt("get", ["uiresources", "-o", "json", "--port", port], {
-    inheritStdio: false,
-    timeoutMs: 10_000,
-  });
-  if (result.exitCode !== 0) throw new Error(result.stderr.trim() || "Tilt UI is unreachable");
-  return parseTiltUiResourceList(JSON.parse(result.stdout) as unknown);
+  let result: TiltCommandResult;
+  try {
+    result = await runTilt("get", ["uiresources", "-o", "json", "--port", port], {
+      inheritStdio: false,
+      timeoutMs: 10_000,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const kind =
+      /ENOENT|not found|no such file|connection refused|failed to connect|could not connect|unable to connect|Tilt is not running/i.test(
+        message,
+      )
+        ? "unavailable"
+        : "error";
+    throw new TiltEventsLoadError(message, kind);
+  }
+  if (result.exitCode !== 0) {
+    const message = result.stderr.trim() || `tilt get exited with code ${result.exitCode}`;
+    const kind =
+      /connection refused|failed to connect|could not connect|unable to connect|Tilt is not running|no running Tilt/i.test(
+        message,
+      )
+        ? "unavailable"
+        : "error";
+    throw new TiltEventsLoadError(message, kind);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout) as unknown;
+  } catch {
+    throw new TiltEventsLoadError("Tilt returned invalid UIResource JSON", "error");
+  }
+  try {
+    return parseTiltUiResourceList(parsed);
+  } catch (error) {
+    throw new TiltEventsLoadError(
+      error instanceof Error ? error.message : "Tilt returned an invalid UIResource list",
+      "error",
+    );
+  }
 }

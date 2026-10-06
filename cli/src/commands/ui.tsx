@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { Box, render, Text, useApp, useInput, useStdin, useStdout } from "ink";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DetailPanel,
   FileTree,
@@ -36,7 +36,7 @@ import { createStatusMessageController } from "../utils/status-message.js";
 import { getListRowFromMouseY, getTerminalRuleWidth } from "../utils/terminal-layout.js";
 import { isTiltAvailable } from "../utils/tilt.js";
 import type { TiltEventSnapshot, TiltResourceSummary } from "../utils/tilt-events.js";
-import { loadTiltEvents } from "../utils/tilt-events.js";
+import { loadTiltEvents, TiltEventsLoadError } from "../utils/tilt-events.js";
 
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
 const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => {
@@ -186,7 +186,21 @@ function formatResourceStatus(resource: TiltResourceSummary): string {
 function formatEventTime(value?: string): string {
   if (!value) return "Current";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? value.slice(0, 20)
+    : date
+        .toISOString()
+        .replace("T", " ")
+        .replace(/\.\d{3}Z$/, "Z");
+}
+
+function formatEventDetails(value: string, width: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  const suffix = "...";
+  const maxLength = Math.max(suffix.length + 8, Math.floor(width) - 2);
+  return normalized.length > maxLength
+    ? normalized.slice(0, maxLength - suffix.length).trimEnd() + suffix
+    : normalized;
 }
 
 export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
@@ -221,8 +235,10 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
   const [showEnabledOnly, setShowEnabledOnly] = useState(true);
   const [eventSnapshot, setEventSnapshot] = useState<TiltEventSnapshot | null>(null);
   const [eventLoadState, setEventLoadState] = useState<
-    "idle" | "loading" | "ready" | "unavailable"
+    "idle" | "loading" | "ready" | "unavailable" | "error"
   >("idle");
+  const [eventLoadError, setEventLoadError] = useState<string | null>(null);
+  const eventRequestRef = useRef(0);
 
   const statusMessage = useMemo(() => createStatusMessageController(setMessage), []);
   useEffect(() => () => statusMessage.dispose(), [statusMessage]);
@@ -251,13 +267,23 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
   }, []);
 
   const refreshEvents = useCallback(async (): Promise<void> => {
+    const requestId = ++eventRequestRef.current;
     setEventLoadState("loading");
+    setEventLoadError(null);
     try {
-      setEventSnapshot(await loadTiltEvents());
+      const snapshot = await loadTiltEvents();
+      if (requestId !== eventRequestRef.current) return;
+      setEventSnapshot(snapshot);
       setEventLoadState("ready");
-    } catch {
+    } catch (error) {
+      if (requestId !== eventRequestRef.current) return;
       setEventSnapshot(null);
-      setEventLoadState("unavailable");
+      if (error instanceof TiltEventsLoadError && error.kind === "unavailable") {
+        setEventLoadState("unavailable");
+        return;
+      }
+      setEventLoadError(error instanceof Error ? error.message : String(error));
+      setEventLoadState("error");
     }
   }, []);
 
@@ -266,7 +292,11 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
   }, [refresh]);
 
   useEffect(() => {
-    if (activeTab === "events") void refreshEvents();
+    if (activeTab !== "events") return;
+    void refreshEvents();
+    return () => {
+      eventRequestRef.current += 1;
+    };
   }, [activeTab, refreshEvents]);
 
   const selectedStackData = useMemo(() => {
@@ -869,7 +899,7 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
                 <Box flexDirection="column" flexGrow={1}>
                   <Box marginBottom={1}>
                     <Text bold color={theme.muted}>
-                      [ Event Timeline ]
+                      {theme.ascii ? "[ Event Timeline ]" : "┌─ Event Timeline ─"}
                     </Text>
                   </Box>
                   {(eventLoadState === "idle" || eventLoadState === "loading") && (
@@ -885,6 +915,15 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
                       </Text>
                     </Box>
                   )}
+                  {eventLoadState === "error" && (
+                    <Box flexDirection="column">
+                      <Text color={theme.error}>Could not load Tilt events.</Text>
+                      <Text color={theme.muted}>
+                        {formatEventDetails(eventLoadError ?? "Unknown Tilt error", mainPanelWidth)}
+                      </Text>
+                      <Text color={theme.muted}>Press [r] to retry.</Text>
+                    </Box>
+                  )}
                   {eventLoadState === "ready" && (
                     <>
                       {eventSnapshot && eventSnapshot.resources.length > 0 && (
@@ -893,7 +932,7 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
                             Current resources
                           </Text>
                           {eventSnapshot.resources.slice(0, 12).map((resource) => (
-                            <Text key={resource.name} color="cyan">
+                            <Text key={resource.name} color={theme.accent}>
                               {resource.name}: {formatResourceStatus(resource)}
                             </Text>
                           ))}
@@ -905,6 +944,9 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
                       <Text bold color={theme.muted}>
                         Recent events
                       </Text>
+                      {eventSnapshot && eventSnapshot.events.length > 20 && (
+                        <Text color={theme.muted}>Showing first 20 events</Text>
+                      )}
                       {eventSnapshot?.events.length ? (
                         <Box flexDirection="column" marginTop={1}>
                           {eventSnapshot.events.slice(0, 20).map((event) => (
@@ -923,7 +965,11 @@ export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) =>
                                 {formatEventTime(event.occurredAt)} {event.resourceName}{" "}
                                 {event.title}
                               </Text>
-                              {event.details && <Text color={theme.muted}>{event.details}</Text>}
+                              {event.details && (
+                                <Text color={theme.muted}>
+                                  {formatEventDetails(event.details, mainPanelWidth)}
+                                </Text>
+                              )}
                             </Box>
                           ))}
                         </Box>

@@ -8,7 +8,9 @@ import {
   ResourceSelectInput,
   ResourceTable,
   TabBar,
+  TUIHeader,
 } from "../components/index.js";
+import { TABS } from "../components/TabBar.js";
 import type {
   DiscoveredResource,
   DiscoveredStack,
@@ -20,7 +22,7 @@ import type {
   TabId,
 } from "../types/index.js";
 import { errorFactories, requireProjectRoot } from "../utils/errors.js";
-import { findProjectRoot } from "../utils/paths.js";
+import { findProjectRoot, getPackageVersion } from "../utils/paths.js";
 import { describeSearch } from "../utils/search-status.js";
 import {
   clearMetadataCache,
@@ -30,6 +32,7 @@ import {
   getStackMetadata,
 } from "../utils/services.js";
 import { createStatusMessageController } from "../utils/status-message.js";
+import { getListRowFromMouseY, getTerminalRuleWidth } from "../utils/terminal-layout.js";
 import { isTiltAvailable } from "../utils/tilt.js";
 
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
@@ -49,11 +52,13 @@ const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => (
       <Text bold underline>
         Navigation
       </Text>
-      <Text> ↑/↓ Navigate list items</Text>
+      <Text> ↑/↓ or j/k Navigate list items</Text>
+      <Text> g/G or Home/End First/last item</Text>
+      <Text> PgUp/PgDn Move one page</Text>
       <Text> Enter Select item / Open detail</Text>
       <Text> Space Toggle expand (tree view)</Text>
       <Text> Tab Next tab</Text>
-      <Text> 1-4 Direct tab access</Text>
+      <Text> {TABS[0].shortcut}-{TABS[TABS.length - 1].shortcut} Direct tab access</Text>
 
       <Box marginTop={1}>
         <Text bold underline>
@@ -144,7 +149,7 @@ const EmptyState: React.FC<{ message?: string }> = ({ message }) => (
   </Box>
 );
 
-const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
+export const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const { stdin, setRawMode } = useStdin();
@@ -158,8 +163,17 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   const [isSearching, setIsSearching] = useState(false);
 
   const [terminalWidth, setTerminalWidth] = useState(stdout.columns || 120);
+  const [terminalRows, setTerminalRows] = useState(stdout.rows || 24);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [mouseEnabled, setMouseEnabled] = useState(true);
+  const [listTop, setListTop] = useState<number | null>(null);
+  const [listStart, setListStart] = useState(0);
+  // Reserve the header, tab bar, hints and footer; keep the cursor visible.
+  const pageSize = Math.max(1, terminalRows - 14);
+  const handleListLayout = useCallback((top: number, firstVisible = 0): void => {
+    setListTop(top);
+    setListStart(firstVisible);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTooltips, setShowTooltips] = useState(true);
@@ -298,7 +312,15 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
     return [];
   }, [activeTab, filteredStacks, filteredServices, selectedStackData, selectedServiceData]);
 
-  const items = getItems();
+  const items = useMemo(getItems, [getItems]);
+  const selectableListVisible =
+    !loading &&
+    !error &&
+    !showHelp &&
+    (activeTab === "overview" ||
+      (activeTab === "resources" && !selectedStackData) ||
+      (activeTab === "files" && !selectedServiceData) ||
+      (activeTab === "config" && !selectedServiceData));
 
   // Only the stack and service lists are filtered by the query; drilled-in views are not.
   const searchList =
@@ -381,12 +403,13 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
         const isLeftClick = (btn & 0b11) === 0;
 
         if (isLeftClick && !release) {
-          // Calculate row in the list (header takes ~6 lines)
-          const listRow = y - 7; // Adjust for header, tabs, and borders
+          const listRow =
+            selectableListVisible && listTop !== null ? getListRowFromMouseY(y, listTop) : -1;
 
-          if (listRow >= 0 && listRow < items.length) {
-            setHighlightedIndex(listRow);
-            const item = items[listRow];
+          const itemIndex = listStart + listRow;
+          if (listRow >= 0 && listRow < pageSize && itemIndex < items.length) {
+            setHighlightedIndex(itemIndex);
+            const item = items[itemIndex];
             if (item) {
               handleSelect(item);
             }
@@ -401,11 +424,21 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
       stdin.off("data", handleMouseData);
       stdin.removeAllListeners("data");
     };
-  }, [stdin, items, mouseEnabled, handleSelect]);
+  }, [
+    stdin,
+    items,
+    listTop,
+    listStart,
+    pageSize,
+    selectableListVisible,
+    mouseEnabled,
+    handleSelect,
+  ]);
 
   const handleResize = useCallback(() => {
     setTerminalWidth(stdout.columns || 120);
-  }, [stdout.columns]);
+    setTerminalRows(stdout.rows || 24);
+  }, [stdout]);
 
   useEffect(() => {
     stdout.on("resize", handleResize);
@@ -525,7 +558,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
     }
 
     if (key.tab) {
-      const tabs: TabId[] = ["overview", "resources", "files", "config"];
+      const tabs = TABS.map((tab) => tab.id);
       const currentIdx = tabs.indexOf(activeTab);
       const nextIdx = key.shift
         ? (currentIdx - 1 + tabs.length) % tabs.length
@@ -534,23 +567,24 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
       return;
     }
 
-    if (/^[1-4]$/.test(input)) {
-      const tabMap: Record<string, TabId> = {
-        "1": "overview",
-        "2": "resources",
-        "3": "files",
-        "4": "config",
-      };
-      setActiveTab(tabMap[input]);
+    const shortcutTab = TABS.find((tab) => tab.shortcut === input);
+    if (shortcutTab) {
+      setActiveTab(shortcutTab.id);
       return;
     }
 
-    if (key.upArrow) {
+    const plainKey = !key.ctrl && !key.meta;
+    if (items.length > 0 && (key.upArrow || (plainKey && input === "k"))) {
       setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
     }
-    if (key.downArrow) {
+    if (items.length > 0 && (key.downArrow || (plainKey && input === "j"))) {
       setHighlightedIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
     }
+    if (key.home || (plainKey && input === "g")) setHighlightedIndex(0);
+    if (key.end || (plainKey && input === "G")) setHighlightedIndex(Math.max(0, items.length - 1));
+    if (key.pageUp) setHighlightedIndex((prev) => Math.max(0, prev - pageSize));
+    if (key.pageDown)
+      setHighlightedIndex((prev) => Math.min(Math.max(0, items.length - 1), prev + pageSize));
     if (key.return || input === " ") {
       const currentItem = items[highlightedIndex];
       if (currentItem) {
@@ -587,8 +621,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   }, [selectedServiceData, services]);
 
   const showSidebar = terminalWidth > 100;
-  const compactTabBar = terminalWidth < 100;
-  const compact = terminalWidth < 80;
+  const mainPanelWidth = showSidebar ? terminalWidth - 45 : terminalWidth - 4;
 
   if (loading) {
     return <LoadingScreen message="Discovering resources..." animated={animated} />;
@@ -598,27 +631,33 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
     return <ErrorScreen error={error} onRetry={refresh} />;
   }
 
+  const header = (
+    <>
+      <TUIHeader
+        projectRoot={projectRoot}
+        resourceCount={services.length}
+        terminalWidth={terminalWidth}
+        version={getPackageVersion()}
+      />
+
+      <Box paddingX={1}>
+        <Text color="gray">{"─".repeat(getTerminalRuleWidth(terminalWidth))}</Text>
+      </Box>
+    </>
+  );
+
   if (services.length === 0) {
-    return <EmptyState message={message} />;
+    return (
+      <Box flexDirection="column" height={stdout.rows || 24}>
+        {header}
+        <EmptyState message={message} />
+      </Box>
+    );
   }
 
   return (
     <Box flexDirection="column" height={stdout.rows || 24}>
-      <Box paddingX={1} paddingY={0}>
-        <Text>
-          <Text color="cyan" bold>
-            ▓▒░ TDK NEON EDITION ░▒▓
-          </Text>
-          <Text color="gray"> │ </Text>
-          <Text color="white">{projectRoot}</Text>
-          <Text color="gray"> │ </Text>
-          <Text color="green">{services.length} services ready</Text>
-        </Text>
-      </Box>
-
-      <Box paddingX={1}>
-        <Text color="gray">{"─".repeat(compact ? 60 : Math.min(terminalWidth - 4, 100))}</Text>
-      </Box>
+      {header}
 
       {isSearching && (
         <Box paddingX={1} height={1}>
@@ -654,7 +693,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                       ? `Select service to view files │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
                       : activeTab === "config"
                         ? `View configurations │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help`
-                        : `[Tab] Next │ [1-4] Tabs │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help │ [q] Quit`}
+                        : `[Tab] Next │ [${TABS[0].shortcut}-${TABS[TABS.length - 1].shortcut}] Tabs │ [e] ${showEnabledOnly ? "show all" : "enabled only"} │ [?] help │ [q] Quit`}
           </Text>
         </Box>
       )}
@@ -668,15 +707,15 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
       {!showHelp && (
         <>
           <Box marginTop={1}>
-            <TabBar activeTab={activeTab} onTabChange={setActiveTab} compact={compactTabBar} />
+            <TabBar
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              terminalWidth={terminalWidth}
+            />
           </Box>
 
           <Box flexDirection="row" paddingX={1} flexGrow={1}>
-            <Box
-              flexDirection="column"
-              flexGrow={1}
-              width={showSidebar ? terminalWidth - 45 : terminalWidth - 4}
-            >
+            <Box flexDirection="column" flexGrow={1} width={mainPanelWidth}>
               {activeTab === "overview" && (
                 <>
                   <Box marginBottom={1}>
@@ -689,6 +728,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                       items={items}
                       onSelect={handleSelect}
                       highlightedIndex={highlightedIndex}
+                      isActive={!isSearching}
+                      maxVisibleItems={pageSize}
+                      width={mainPanelWidth}
+                      onLayout={handleListLayout}
                     />
                   </Box>
                 </>
@@ -719,6 +762,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          isActive={!isSearching}
+                          maxVisibleItems={pageSize}
+                          width={mainPanelWidth}
+                          onLayout={handleListLayout}
                         />
                       </Box>
                     </>
@@ -748,6 +795,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          isActive={!isSearching}
+                          maxVisibleItems={pageSize}
+                          width={mainPanelWidth}
+                          onLayout={handleListLayout}
                         />
                       </Box>
                     </>
@@ -782,6 +833,10 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          isActive={!isSearching}
+                          maxVisibleItems={pageSize}
+                          width={mainPanelWidth}
+                          onLayout={handleListLayout}
                         />
                       </Box>
                     </>
@@ -853,5 +908,6 @@ export const uiCommand = new Command("ui")
     }
 
     requireProjectRoot();
-    render(<TUIApp animated={options.animations} />);
+    // The app has no Static content, so its live layout starts at row 1 in the alternate screen.
+    render(<TUIApp animated={options.animations} />, { alternateScreen: true });
   });

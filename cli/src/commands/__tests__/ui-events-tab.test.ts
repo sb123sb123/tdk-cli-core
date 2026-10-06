@@ -15,14 +15,14 @@ describe("tdk ui Events tab", () => {
     expect(ui).not.toContain("Events tab not yet implemented");
     expect(ui).not.toContain("Event timeline");
   });
-  it("keeps the visible tabs directly reachable with consecutive shortcuts", () => {
+  it("keeps the visible tabs directly reachable from one shared tab list", () => {
+    expect(tabBar).toContain("export const TABS: Tab[] = [");
     expect(tabBar).toContain('{ id: "files", label: "FILES", shortcut: "3" }');
     expect(tabBar).toContain('{ id: "config", label: "CONFIG", shortcut: "4" }');
-    expect(ui).toContain('const tabs: TabId[] = ["overview", "resources", "files", "config"]');
-    expect(ui).toContain('"3": "files"');
-    expect(ui).toContain('"4": "config"');
-    expect(ui).toContain("1-4 Direct tab access");
-    expect(ui).toContain("[1-4] Tabs");
+    expect(ui).toContain('import { TABS } from "../components/TabBar.js"');
+    expect(ui).toContain("const tabs = TABS.map((tab) => tab.id)");
+    expect(ui).toContain("const shortcutTab = TABS.find((tab) => tab.shortcut === input)");
+    expect(ui).toContain("{TABS[0].shortcut}-{TABS[TABS.length - 1].shortcut} Direct tab access");
     expect(types).toContain('export type TabId = "overview" | "resources" | "files" | "config";');
   });
 });

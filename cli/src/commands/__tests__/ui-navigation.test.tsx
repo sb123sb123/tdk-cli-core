@@ -216,6 +216,8 @@ it("keeps the Events tab reachable when no local services are discovered", async
     await new Promise((resolve) => setTimeout(resolve, 30));
     await app.waitUntilRenderFlush();
     expect(io.output().replace(ANSI_SGR, "")).toContain("No service.json files found");
+    await send("\x1b");
+    expect(io.output().replace(ANSI_SGR, "")).toContain("Press q to quit");
     await send("3");
     const output = io.output().replace(ANSI_SGR, "");
     expect(output).toContain("Event Timeline");

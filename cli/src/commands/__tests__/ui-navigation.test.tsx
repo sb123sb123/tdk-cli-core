@@ -3,6 +3,12 @@ import { render } from "ink";
 import { expect, it, vi } from "vitest";
 import { TUIApp } from "../ui.js";
 
+const { discoverResourcesMock, loadTiltEventsMock } = vi.hoisted(() => ({
+  discoverResourcesMock: vi.fn(() => [{ name: "api", path: "/tmp/test/api", stack: "stack-00" }]),
+  loadTiltEventsMock: vi.fn(),
+}));
+vi.mock("../../utils/tilt-events.js", () => ({ loadTiltEvents: loadTiltEventsMock }));
+
 const ANSI_SGR = new RegExp([String.fromCharCode(0x1b), "\\[[0-?]*[ -/]*[@-~]"].join(""), "g");
 
 vi.mock("../../utils/services.js", () => ({
@@ -13,7 +19,7 @@ vi.mock("../../utils/services.js", () => ({
       resources: [],
       resourceCount: 0,
     })),
-  discoverResources: () => [{ name: "api", path: "/tmp/test/api", stack: "stack-00" }],
+  discoverResources: discoverResourcesMock,
   getResourceMetadata: vi.fn(),
   getStackMetadata: vi.fn(),
 }));
@@ -102,6 +108,119 @@ it("navigates with vim keys and terminal page/home/end sequences while search re
     await send("G");
     await send("\r");
     expect(io.output()).toContain("Selected stack: stack-29");
+  } finally {
+    app.unmount();
+    io.stdin.destroy();
+    io.stdout.destroy();
+    io.stderr.destroy();
+  }
+});
+
+it("renders Tilt events and refreshes them with r", async () => {
+  const snapshot = {
+    resources: [{ name: "api", runtimeStatus: "OK", updateStatus: "OK", hasPendingChanges: false }],
+    events: [
+      {
+        id: "api:build:one",
+        resourceName: "api",
+        kind: "success" as const,
+        title: "Build completed",
+        occurredAt: "2026-10-07T12:00:00Z",
+      },
+    ],
+  };
+  loadTiltEventsMock.mockReset().mockResolvedValue(snapshot);
+  const io = streams();
+  const app = render(<TUIApp animated={false} />, {
+    stdin: io.stdin,
+    stdout: io.stdout,
+    stderr: io.stderr,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  const send = async (key: string) => {
+    io.stdin.write(key);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await app.waitUntilRenderFlush();
+  };
+  try {
+    await send("3");
+    const output = io.output().replace(ANSI_SGR, "");
+    expect(output).toContain("Event Timeline");
+    expect(output).toContain("api: Runtime OK; Update OK");
+    expect(output).toContain("Build completed");
+    expect(loadTiltEventsMock).toHaveBeenCalledTimes(1);
+    await send("r");
+    expect(loadTiltEventsMock).toHaveBeenCalledTimes(2);
+  } finally {
+    app.unmount();
+    io.stdin.destroy();
+    io.stdout.destroy();
+    io.stderr.destroy();
+  }
+});
+
+it("shows a friendly state when Tilt cannot provide events", async () => {
+  discoverResourcesMock
+    .mockReset()
+    .mockReturnValue([{ name: "api", path: "/tmp/test/api", stack: "stack-00" }]);
+  loadTiltEventsMock.mockReset().mockRejectedValue(new Error("Tilt is offline"));
+  const io = streams();
+  const app = render(<TUIApp animated={false} />, {
+    stdin: io.stdin,
+    stdout: io.stdout,
+    stderr: io.stderr,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  const send = async (key: string) => {
+    io.stdin.write(key);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await app.waitUntilRenderFlush();
+  };
+  try {
+    await send("3");
+    const output = io.output().replace(ANSI_SGR, "");
+    expect(output).toContain("Tilt is not running or its UI is unreachable.");
+    expect(output).toContain("press [r] to retry.");
+    await send("r");
+    expect(loadTiltEventsMock).toHaveBeenCalledTimes(2);
+  } finally {
+    app.unmount();
+    io.stdin.destroy();
+    io.stdout.destroy();
+    io.stderr.destroy();
+  }
+});
+
+it("keeps the Events tab reachable when no local services are discovered", async () => {
+  discoverResourcesMock.mockReset().mockReturnValue([]);
+  loadTiltEventsMock.mockReset().mockResolvedValue({ resources: [], events: [] });
+  const io = streams();
+  const app = render(<TUIApp animated={false} />, {
+    stdin: io.stdin,
+    stdout: io.stdout,
+    stderr: io.stderr,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  const send = async (key: string) => {
+    io.stdin.write(key);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await app.waitUntilRenderFlush();
+  };
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await app.waitUntilRenderFlush();
+    expect(io.output().replace(ANSI_SGR, "")).toContain("No service.json files found");
+    await send("3");
+    const output = io.output().replace(ANSI_SGR, "");
+    expect(output).toContain("Event Timeline");
+    expect(output).toContain("No recent build events are available from Tilt yet.");
+    expect(loadTiltEventsMock).toHaveBeenCalledTimes(1);
   } finally {
     app.unmount();
     io.stdin.destroy();

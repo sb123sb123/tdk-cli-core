@@ -23,3 +23,21 @@ Containers are removed after each tier. Results are printed as a table and saved
 **Git hook (opt-in):** call `scripts/benchmark/pre-release-gate.sh` from `pre-push` or `pre-commit`. It does nothing unless `TDK_BENCH_GATE=1`.
 
 Rebuild the ERP images after engine changes (`tdk project --yes && tdk up` in the ERP project) so the benchmark measures the current layers. The header line reports what share of images use a single-process `CMD`.
+
+## CLI startup and discovery benchmark
+
+Run the benchmark with Node.js 22.12 or newer; it has no additional package dependencies:
+
+```bash
+node scripts/benchmark/cli-startup.mjs
+```
+
+For each service count, the script creates a temporary project with that many schema-version-1 `service.json` manifests, performs one warm-up, then measures `tdk version`, `tdk --help`, `tdk resources`, `tdk stacks`, and `tdk status` in fresh Node processes. The default tiers are 10, 100, and 500 services with 10 measured runs per command and tier. It prints median, minimum, and maximum wall time and writes raw samples and runtime metadata to `benchmarks/results/cli-startup-*.json`.
+
+Use `--temp-dir <path>` to keep fixtures and child-process temporary files on a chosen volume. Use `--sizes 10 --runs 1 --warmup 0 --output <path>` for a quick smoke run; normal results should retain the default ten runs and a warm-up. For example:
+
+```powershell
+node scripts/benchmark/cli-startup.mjs --temp-dir G:/tdk-benchmark-temp
+```
+
+Timing includes process startup, command work, and captured CLI output; fixture generation and cleanup are excluded. The benchmark starts no containers or Tilt services. The `tdk status` sample includes its normal read-only Tilt availability probe. Results are specific to the recorded hardware, operating system, and Node runtime, so compare like-for-like environments. This is a diagnostic baseline, not a CI performance gate.

@@ -235,8 +235,12 @@ export const upCommand = new Command("up")
       const foundRoot = options.dryRun ? requireProjectRoot() : findProjectRoot();
       const projectRoot = foundRoot ?? process.cwd();
       const discoveredResources = discoverResourcesStrict();
-      const discoveredStacks = discoverStacks(discoveredResources);
-      const discoveredStackNames = discoveredStacks.map((stack) => stack.name);
+      let discoveredStacks: ReturnType<typeof discoverStacks> | undefined;
+      let discoveredStackNames: string[] = [];
+      if (!options.only || stackName) {
+        discoveredStacks = discoverStacks(discoveredResources);
+        discoveredStackNames = discoveredStacks.map((stack) => stack.name);
+      }
       // Reject a bad request before anything below can write to the project (.env, runtime assets, .tdk/project.json).
       if (options.only) {
         if (stackName && !stackExists(stackName)) {
@@ -316,7 +320,7 @@ export const upCommand = new Command("up")
         stackDescription = `stack "${stackName}"`;
       } else {
         servicesToStart = discoveredResources;
-        const allStacks = discoveredStacks;
+        const allStacks = discoveredStacks ?? discoverStacks(discoveredResources);
         stackDescription = `all stacks (${formatCount(allStacks.length, "stack")}, ${formatCount(servicesToStart.length, "service")})`;
       }
 

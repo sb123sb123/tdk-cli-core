@@ -295,6 +295,54 @@ describe("bring-your-own resource type", () => {
     }
   });
 
+  it("reports an unknown --only name before aggregating malformed stack data", async () => {
+    await createByo();
+    addResource("other", "backend", "store", 4100);
+    const malformedPath = join(tempDir, "services", "broken", "service");
+    mkdirSync(malformedPath, { recursive: true });
+    writeFileSync(
+      join(malformedPath, "service.json"),
+      JSON.stringify({
+        ...createServiceJson("broken", "backend", "broken", 4200),
+        stack: { toString: null, valueOf: null },
+      }),
+    );
+    clearDiscoveryCache();
+
+    const originalAllowNativeWindows = process.env.TDK_ALLOW_NATIVE_WINDOWS;
+    process.env.TDK_ALLOW_NATIVE_WINDOWS = "1";
+    const emitted: Array<{ data: Record<string, unknown>; errors?: unknown[] }> = [];
+    jsonOutput.createJsonEmitter.mockReturnValue(((
+      data: Record<string, unknown>,
+      errors?: unknown[],
+    ) => emitted.push({ data, errors })) as never);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit");
+    }) as never);
+
+    try {
+      await upCommand
+        .parseAsync(["node", "tdk", "--only", "missing", "--dry-run", "--json"], { from: "node" })
+        .catch(() => {});
+
+      expect(exit).toHaveBeenCalledWith(2);
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]?.data).toEqual({ ok: false });
+      expect(emitted[0]?.errors?.[0]).toMatchObject({
+        code: "UNKNOWN_SERVICE",
+        message: expect.stringContaining("Unknown service missing"),
+      });
+    } finally {
+      error.mockRestore();
+      exit.mockRestore();
+      jsonOutput.createJsonEmitter.mockReset();
+      if (originalAllowNativeWindows === undefined) delete process.env.TDK_ALLOW_NATIVE_WINDOWS;
+      else process.env.TDK_ALLOW_NATIVE_WINDOWS = originalAllowNativeWindows;
+      clearDiscoveryCache();
+    }
+  });
+
   it("suggests close stack names for text filters", async () => {
     await createByo();
     const output: string[] = [];

@@ -189,6 +189,7 @@ export interface ResourceSelectInputProps {
     items: SelectItem[];
     onSelect: (item: SelectItem) => void;
     highlightedIndex: number;
+    width: number;
     onLayout?: (listTop: number) => void;
 }
 export interface FileNode {

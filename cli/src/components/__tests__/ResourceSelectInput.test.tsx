@@ -1,8 +1,10 @@
 import { PassThrough } from "node:stream";
-import { Box, render, Text } from "ink";
+import { Box, render, renderToString, Text } from "ink";
 import { describe, expect, it } from "vitest";
 import { getListRowFromMouseY } from "../../utils/terminal-layout.js";
 import { ResourceSelectInput } from "../ResourceSelectInput.js";
+
+const ANSI_SGR = new RegExp([String.fromCharCode(0x1b), "\\[[0-?]*[ -/]*[@-~]"].join(""), "g");
 
 function createStreams(columns: number) {
   const stdin = new PassThrough() as unknown as NodeJS.ReadStream;
@@ -34,6 +36,7 @@ describe("ResourceSelectInput layout measurement", () => {
           items={[{ value: "api", label: "shop-api" }]}
           onSelect={() => {}}
           highlightedIndex={0}
+          width={80}
           onLayout={(top) => measuredTops.push(top)}
         />
       </Box>,
@@ -56,5 +59,25 @@ describe("ResourceSelectInput layout measurement", () => {
       streams.stdout.destroy();
       streams.stderr.destroy();
     }
+  });
+
+  it("keeps long resource labels on one terminal row", () => {
+    const width = 20;
+    const output = renderToString(
+      <ResourceSelectInput
+        items={[
+          { value: "first", label: "a-resource-label-that-is-longer-than-the-terminal" },
+          { value: "second", label: "another-long-resource-label" },
+        ]}
+        onSelect={() => {}}
+        highlightedIndex={0}
+        width={width}
+      />,
+      { columns: width },
+    ).replace(ANSI_SGR, "");
+    const rows = output.split(/\r?\n/).filter((line) => line.length > 0);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.every((line) => Array.from(line).length <= width)).toBe(true);
   });
 });

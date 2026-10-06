@@ -598,6 +598,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
   }, [selectedServiceData, services]);
 
   const showSidebar = terminalWidth > 100;
+  const mainPanelWidth = showSidebar ? terminalWidth - 45 : terminalWidth - 4;
 
   if (loading) {
     return <LoadingScreen message="Discovering resources..." animated={animated} />;
@@ -687,11 +688,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
           </Box>
 
           <Box flexDirection="row" paddingX={1} flexGrow={1}>
-            <Box
-              flexDirection="column"
-              flexGrow={1}
-              width={showSidebar ? terminalWidth - 45 : terminalWidth - 4}
-            >
+            <Box flexDirection="column" flexGrow={1} width={mainPanelWidth}>
               {activeTab === "overview" && (
                 <>
                   <Box marginBottom={1}>
@@ -704,6 +701,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                       items={items}
                       onSelect={handleSelect}
                       highlightedIndex={highlightedIndex}
+                      width={mainPanelWidth}
                       onLayout={setListTop}
                     />
                   </Box>
@@ -735,6 +733,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          width={mainPanelWidth}
                           onLayout={setListTop}
                         />
                       </Box>
@@ -778,6 +777,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          width={mainPanelWidth}
                           onLayout={setListTop}
                         />
                       </Box>
@@ -813,6 +813,7 @@ const TUIApp: React.FC<{ animated?: boolean }> = ({ animated = true }) => {
                           items={items}
                           onSelect={handleSelect}
                           highlightedIndex={highlightedIndex}
+                          width={mainPanelWidth}
                           onLayout={setListTop}
                         />
                       </Box>

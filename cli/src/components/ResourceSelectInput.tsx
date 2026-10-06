@@ -8,6 +8,7 @@ export const ResourceSelectInput: React.FC<ResourceSelectInputProps> = ({
   items,
   onSelect,
   highlightedIndex,
+  width,
   onLayout,
 }) => {
   const listRef = useRef<Parameters<typeof measureElement>[0] | null>(null);
@@ -35,20 +36,22 @@ export const ResourceSelectInput: React.FC<ResourceSelectInputProps> = ({
   });
 
   return (
-    <Box ref={listRef} flexDirection="column">
+    <Box ref={listRef} flexDirection="column" width={width}>
       {items.map((item, index) => {
         const isSelected = index === selected;
         return (
-          <Box key={item.value}>
-            <Text color={isSelected ? "cyan" : undefined}>
-              {isSelected ? "\u2593\u2592\u2591 " : "    "}
-            </Text>
-            <Text
-              color={isSelected ? "cyan" : "white"}
-              bold={isSelected}
-              backgroundColor={isSelected ? "black" : undefined}
-            >
-              {item.label}
+          <Box key={item.value} width={width}>
+            <Text wrap="truncate-end">
+              <Text color={isSelected ? "cyan" : undefined}>
+                {isSelected ? "\u2593\u2592\u2591 " : "    "}
+              </Text>
+              <Text
+                color={isSelected ? "cyan" : "white"}
+                bold={isSelected}
+                backgroundColor={isSelected ? "black" : undefined}
+              >
+                {item.label}
+              </Text>
             </Text>
           </Box>
         );

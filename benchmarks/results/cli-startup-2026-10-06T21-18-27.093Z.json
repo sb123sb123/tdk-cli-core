@@ -9,6 +9,12 @@
     "cpuModel": "12th Gen Intel(R) Core(TM) i5-12600KF",
     "hostMemGiB": 31.835
   },
+  "environment": {
+    "inheritedHostEnvironment": true,
+    "isolatedFromUserTdkConfigAndPath": false,
+    "childOverrides": ["TMP", "TEMP", "TMPDIR", "NO_COLOR"],
+    "tiltExecutableOnPath": false
+  },
   "options": {
     "sizes": [
       10,
@@ -18,6 +24,7 @@
     "runs": 10,
     "warmupCount": 1,
     "timeoutMs": 60000,
+    "skipStatus": false,
     "commands": [
       "tdk version",
       "tdk --help",
@@ -28,8 +35,11 @@
   },
   "notes": [
     "Each sample starts a fresh Node process and measures wall time through command exit; fixture generation and cleanup are outside the timed interval.",
-    "The generated projects contain schemaVersion 1 service.json files; no containers or Tilt services are started. The tdk status sample includes its normal read-only Tilt availability probe.",
-    "CLI output is captured. Compare results only on like-for-like hardware, operating system, and Node runtime; this is not a CI performance gate."
+    "Service manifests contain only schemaVersion, appName, appType, and stack; this measures count-based discovery, not rich validation or generated runtime files.",
+    "Child processes inherit host environment except TMP, TEMP, TMPDIR, and NO_COLOR; user TDK config and PATH are not isolated.",
+    "Tilt was not on PATH for this Windows sample. tdk status includes the read-only Tilt probe and is not discovery-only; it may wait up to the 10-second timeout.",
+    "The 100-service tdk stacks median is a non-monotonic outlier and should be treated as measurement noise, not a scaling result.",
+    "No containers or Tilt services are started. Compare only like-for-like hardware, operating system, and Node runtime; this is not a CI performance gate."
   ],
   "results": [
     {

@@ -58,7 +58,10 @@ const HelpPanel: React.FC<HelpPanelProps> = ({ onClose }) => (
       <Text> Enter Select item / Open detail</Text>
       <Text> Space Toggle expand (tree view)</Text>
       <Text> Tab Next tab</Text>
-      <Text> {TABS[0].shortcut}-{TABS[TABS.length - 1].shortcut} Direct tab access</Text>
+      <Text>
+        {" "}
+        {TABS[0].shortcut}-{TABS[TABS.length - 1].shortcut} Direct tab access
+      </Text>
 
       <Box marginTop={1}>
         <Text bold underline>

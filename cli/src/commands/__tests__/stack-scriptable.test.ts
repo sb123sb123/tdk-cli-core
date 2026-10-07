@@ -28,8 +28,8 @@ describe("tdk stack command scriptability", () => {
     return projectRoot;
   }
 
-  function addResource(projectRoot: string, name: string, stack = ""): string {
-    const resourceDir = path.join(projectRoot, "services", "main", name);
+  function addResource(projectRoot: string, name: string, stack = "", group = "main"): string {
+    const resourceDir = path.join(projectRoot, "services", group, name);
     fs.mkdirSync(resourceDir, { recursive: true });
     const manifestPath = path.join(resourceDir, "service.json");
     fs.writeFileSync(
@@ -109,6 +109,22 @@ describe("tdk stack command scriptability", () => {
     expect(JSON.parse(fs.readFileSync(apiManifest, "utf8")).stack).toBe("");
   });
 
+  it("rejects duplicate resource names and reports every manifest path before writing", () => {
+    const projectRoot = createProject();
+    const firstManifest = addResource(projectRoot, "api");
+    const secondManifest = addResource(projectRoot, "api", "", "copied");
+
+    const result = runTdk(projectRoot, ["stack", "backend", "--resources", "api", "--yes"]);
+    const output = result.stdout + result.stderr;
+
+    expect(result.status).toBe(1);
+    expect(output).toContain("duplicate names");
+    expect(output).toContain(firstManifest);
+    expect(output).toContain(secondManifest);
+    expect(JSON.parse(fs.readFileSync(firstManifest, "utf8")).stack).toBe("");
+    expect(JSON.parse(fs.readFileSync(secondManifest, "utf8")).stack).toBe("");
+  });
+
   it("rejects an explicitly selected resource that already belongs to a stack", () => {
     const projectRoot = createProject();
     const apiManifest = addResource(projectRoot, "api", "legacy");
@@ -140,6 +156,18 @@ describe("tdk stack command scriptability", () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout + result.stderr).toContain("stack name");
+    expect(JSON.parse(fs.readFileSync(apiManifest, "utf8")).stack).toBe("");
+  });
+
+  it("requires --yes before a non-TTY assignment can reach confirmation", () => {
+    const projectRoot = createProject();
+    const apiManifest = addResource(projectRoot, "api");
+
+    const result = runTdk(projectRoot, ["stack", "backend", "--resources", "api"]);
+    const output = result.stdout + result.stderr;
+
+    expect(result.status).toBe(1);
+    expect(output).toContain("--yes");
     expect(JSON.parse(fs.readFileSync(apiManifest, "utf8")).stack).toBe("");
   });
 

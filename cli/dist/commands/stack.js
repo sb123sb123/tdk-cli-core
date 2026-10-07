@@ -72,6 +72,11 @@ export const stackCommand = new Command("stack")
                     "Use: tdk stack <stack-name> --resources <name...> [--yes]",
                 ]);
             }
+            if (!options.yes) {
+                throw new TdkError("Confirmation requires a TTY.", [
+                    "Pass --yes to skip confirmation when assigning resources without a TTY.",
+                ]);
+            }
         }
         if (stackName)
             assertValid(validateStackName(stackName));
@@ -95,9 +100,17 @@ export const stackCommand = new Command("stack")
                     "Example: `tdk stack api --resources users-api orders-api --yes`",
                 ]);
             }
-            const validNames = [
-                ...new Set(discovery.resources.map((resource) => resource.name)),
-            ].sort();
+            const configPathsByName = new Map();
+            for (const resource of discovery.resources) {
+                const configPaths = configPathsByName.get(resource.name) ?? [];
+                configPaths.push(resource.configPath);
+                configPathsByName.set(resource.name, configPaths);
+            }
+            const duplicates = [...configPathsByName].filter(([, configPaths]) => configPaths.length > 1);
+            if (duplicates.length > 0) {
+                throw new TdkError("Cannot assign resources while duplicate names are present.", duplicates.map(([name, configPaths]) => `Duplicate "${name}" found in ${configPaths.join(" and ")}`));
+            }
+            const validNames = [...configPathsByName.keys()].sort();
             const resourceByName = new Map(discovery.resources.map((resource) => [resource.name, resource]));
             for (const name of requestedNames) {
                 const resource = resourceByName.get(name);

@@ -92,8 +92,8 @@ function parseEnvValue(raw) {
         }
         return value;
     }
-    const commentIndex = value.search(/\s#/);
-    return (commentIndex === -1 ? value : value.slice(0, commentIndex)).trimEnd();
+    const commentIndex = raw.search(/\s#/);
+    return (commentIndex === -1 ? raw : raw.slice(0, commentIndex)).trim();
 }
 /** Parses the Compose-compatible subset used by TDK for project environment files. */
 export function parseEnv(content) {

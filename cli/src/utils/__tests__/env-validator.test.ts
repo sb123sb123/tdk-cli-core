@@ -81,6 +81,13 @@ describe("parseEnv Compose-compatible parsing", () => {
     ]);
   });
 
+  it("keeps empty values empty when followed by an inline comment", () => {
+    expect([...envValidator.parseEnv("N= # c\nVALUE= foo # c\n")]).toEqual([
+      ["N", ""],
+      ["VALUE", "foo"],
+    ]);
+  });
+
   it("decodes the specified double-quoted escapes", () => {
     const quote = String.fromCharCode(34);
     const content = [

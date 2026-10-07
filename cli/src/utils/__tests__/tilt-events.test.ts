@@ -14,6 +14,46 @@ afterEach(() => {
 });
 
 describe("Tilt UIResource event timeline", () => {
+  it("strips terminal escape sequences from Tilt-controlled strings", () => {
+    const result = parseTiltUiResourceList({
+      items: [
+        {
+          metadata: { name: "ap\u001b[2Ji" },
+          status: {
+            buildHistory: [
+              {
+                spanID: "x",
+                finishTime: "2026-10-07T12:00:00Z",
+                error: "boom\u001b]0;pwned\u0007 \u001b[31mred\u001b[0m\u0008",
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(result.resources[0]?.name).toBe("api");
+    expect(result.events[0]?.details).toBe("boom red");
+  });
+
+  it("emits an Update queued event for a queued resource without a current build", () => {
+    const result = parseTiltUiResourceList({
+      items: [
+        {
+          metadata: { name: "api" },
+          status: { queued: true, pendingBuildSince: "2026-10-07T12:05:00Z" },
+        },
+      ],
+    });
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        id: "api:queued",
+        kind: "warning",
+        title: "Update queued",
+        occurredAt: "2026-10-07T12:05:00Z",
+      }),
+    ]);
+  });
+
   it("maps build history, the current build, and resource status into newest-first events", () => {
     const result = parseTiltUiResourceList({
       items: [

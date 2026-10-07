@@ -2,17 +2,19 @@ import { Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs } from "react/jsx-run
 import { Command } from "commander";
 import { Box, render, Text, useApp, useInput, useStdin, useStdout } from "ink";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DetailPanel, FileTree, ResourceSelectInput, ResourceTable, TabBar, TUIHeader, } from "../components/index.js";
+import { DetailPanel, FileTree, ResourceSelectInput, ResourceTable, ServiceIssues, TabBar, TUIHeader, } from "../components/index.js";
 import { TABS } from "../components/TabBar.js";
 import { createTUITheme, TUIThemeContext, useTUITheme } from "../components/ui-theme.js";
 import { errorFactories, requireProjectRoot } from "../utils/errors.js";
 import { findProjectRoot, getPackageVersion } from "../utils/paths.js";
 import { describeSearch } from "../utils/search-status.js";
 import { clearMetadataCache, discoverResources, discoverStacks, getResourceMetadata, getStackMetadata, } from "../utils/services.js";
+import { singleFlight } from "../utils/single-flight.js";
 import { createStatusMessageController } from "../utils/status-message.js";
 import { getListRowFromMouseY, getTerminalRuleWidth } from "../utils/terminal-layout.js";
 import { isTiltAvailable } from "../utils/tilt.js";
-import { loadTiltEvents, TiltEventsLoadError } from "../utils/tilt-events.js";
+import { loadTiltEvents, stripTerminalControls, TiltEventsLoadError, } from "../utils/tilt-events.js";
+import { applyServiceStates, fetchServiceStates, } from "../utils/ui-service-state.js";
 // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved callback prop kept in the component API
 const HelpPanel = ({ onClose }) => {
     const theme = useTUITheme();
@@ -65,7 +67,7 @@ function formatEventTime(value) {
             .replace(/\.\d{3}Z$/, "Z");
 }
 function formatEventDetails(value, width) {
-    const normalized = value.replace(/\s+/g, " ").trim();
+    const normalized = stripTerminalControls(value).replace(/\s+/g, " ").trim();
     const suffix = "...";
     const maxLength = Math.max(suffix.length + 8, Math.floor(width) - 2);
     return normalized.length > maxLength
@@ -109,6 +111,25 @@ export const TUIApp = ({ animated = true }) => {
     useEffect(() => () => statusMessage.dispose(), [statusMessage]);
     const projectRoot = findProjectRoot() || "unknown";
     const [{ stacks, services }, setDiscovered] = useState({ stacks: [], services: [] });
+    // What the running Tilt says about each service: the same answer `tdk status` gives. Empty while no Tilt answers.
+    const [serviceStates, setServiceStates] = useState({});
+    useEffect(() => {
+        let cancelled = false;
+        const tiltPort = Number.parseInt(process.env.TILT_PORT ?? "", 10);
+        // A Tilt call can outlast the 5 s interval; never start a poll while the last one is still running.
+        const run = singleFlight((next) => {
+            if (cancelled)
+                return;
+            setServiceStates((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+        });
+        const poll = () => run(() => fetchServiceStates(services, Number.isInteger(tiltPort) ? tiltPort : 10350));
+        void poll();
+        const timer = setInterval(() => void poll(), 5000);
+        return () => {
+            cancelled = true;
+            clearInterval(timer);
+        };
+    }, [services]);
     // Re-read service.json files from disk. An empty project is not an error:
     // it renders EmptyState. Only a failed discovery shows ErrorScreen.
     const refresh = useCallback(() => {
@@ -168,9 +189,9 @@ export const TUIApp = ({ animated = true }) => {
             return null;
         return {
             stack,
-            metadata: getStackMetadata(stack),
+            metadata: applyServiceStates(getStackMetadata(stack), serviceStates),
         };
-    }, [selectedStack, stacks]);
+    }, [selectedStack, stacks, serviceStates]);
     const selectedServiceData = useMemo(() => {
         if (!selectedService)
             return null;
@@ -542,7 +563,7 @@ export const TUIApp = ({ animated = true }) => {
     }
     const header = (_jsxs(_Fragment, { children: [_jsx(TUIHeader, { projectRoot: projectRoot, resourceCount: services.length, terminalWidth: terminalWidth, version: getPackageVersion() }), _jsx(Box, { paddingX: 1, children: _jsx(Text, { color: theme.muted, children: (theme.ascii ? "-" : "\u2500").repeat(getTerminalRuleWidth(terminalWidth)) }) })] }));
     return (_jsxs(Box, { flexDirection: "column", height: stdout.rows || 24, children: [header, isSearching && (_jsxs(Box, { paddingX: 1, height: 1, children: [_jsxs(Text, { color: theme.warning, children: ["Search: ", searchQuery, "_"] }), searchStatus && (_jsx(Text, { color: theme.muted, dimColor: theme.dimMuted, children: `   ${searchStatus.summary}` }))] })), searchStatus?.emptyMessage && (_jsx(Box, { paddingX: 1, height: 1, children: _jsx(Text, { color: theme.muted, children: searchStatus.emptyMessage }) })), !isSearching && message && (_jsx(Box, { paddingX: 1, height: 1, children: _jsxs(Text, { color: theme.accent, children: [theme.bannerStart, " ", message, " ", theme.bannerEnd] }) })), !isSearching && !message && showTooltips && !showHelp && (_jsx(Box, { paddingX: 1, height: 1, children: _jsx(Text, { color: theme.muted, dimColor: theme.dimMuted, children: createHelpHint(activeTab, selectedStack, selectedService, showEnabledOnly, theme.ascii) }) })), showHelp && (_jsx(Box, { paddingX: 1, flexGrow: 1, children: _jsx(HelpPanel, { onClose: () => setShowHelp(false) }) })), !showHelp && (_jsxs(_Fragment, { children: [_jsx(Box, { marginTop: 1, children: _jsx(TabBar, { activeTab: activeTab, onTabChange: setActiveTab, terminalWidth: terminalWidth }) }), _jsxs(Box, { flexDirection: "row", paddingX: 1, flexGrow: 1, children: [_jsxs(Box, { flexDirection: "column", flexGrow: 1, width: mainPanelWidth, children: [activeTab === "overview" &&
-                                        (services.length === 0 ? (_jsx(EmptyState, { message: message })) : (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: "Stacks" }) }), _jsx(Box, { marginTop: 1, flexGrow: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex, isActive: !isSearching, maxVisibleItems: pageSize, width: mainPanelWidth, onLayout: handleListLayout }) })] }))), activeTab === "resources" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Resources ]" : "┌─ Resources ─" }) }), selectedStackData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: theme.muted, children: ["Stack: ", selectedStackData.stack.name] }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceTable, { resources: selectedStackData.metadata.resources, maxWidth: terminalWidth - (showSidebar ? 50 : 10) }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.muted, children: "Select a stack to view resources" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex, isActive: !isSearching, maxVisibleItems: pageSize, width: mainPanelWidth, onLayout: handleListLayout }) })] }))] })), activeTab === "files" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Autogenerated Files ]" : "┌─ Autogenerated Files ─" }) }), selectedServiceData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: theme.muted, children: ["Service: ", selectedServiceData.service.name] }), _jsx(Box, { marginTop: 1, children: _jsx(FileTree, { nodes: fileTreeNodes, selectedPath: selectedFile || undefined }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.muted, children: "Select a service to view files" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex, isActive: !isSearching, maxVisibleItems: pageSize, width: mainPanelWidth, onLayout: handleListLayout }) })] }))] })), activeTab === "events" && (_jsxs(Box, { flexDirection: "column", flexGrow: 1, children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Event Timeline ]" : "┌─ Event Timeline ─" }) }), (eventLoadState === "idle" || eventLoadState === "loading") && (_jsx(Text, { color: theme.muted, children: "Loading Tilt events..." })), eventLoadState === "unavailable" && (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: theme.warning, children: "Tilt is not running or its UI is unreachable." }), _jsx(Text, { color: theme.muted, children: "Start the stack with tdk up, then press [r] to retry." })] })), eventLoadState === "error" && (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: theme.error, children: "Could not load Tilt events." }), _jsx(Text, { color: theme.muted, children: formatEventDetails(eventLoadError ?? "Unknown Tilt error", mainPanelWidth) }), _jsx(Text, { color: theme.muted, children: "Press [r] to retry." })] })), eventLoadState === "ready" && (_jsxs(_Fragment, { children: [eventSnapshot && eventSnapshot.resources.length > 0 && (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { bold: true, color: theme.muted, children: "Current resources" }), eventSnapshot.resources.slice(0, 12).map((resource) => (_jsxs(Text, { color: theme.accent, children: [resource.name, ": ", formatResourceStatus(resource)] }, resource.name))), eventSnapshot.resources.length > 12 && (_jsx(Text, { color: theme.muted, children: "Showing first 12 resources" }))] })), _jsx(Text, { bold: true, color: theme.muted, children: "Recent events" }), eventSnapshot && eventSnapshot.events.length > 20 && (_jsx(Text, { color: theme.muted, children: "Showing first 20 events" })), eventSnapshot?.events.length ? (_jsx(Box, { flexDirection: "column", marginTop: 1, children: eventSnapshot.events.slice(0, 20).map((event) => (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsxs(Text, { color: event.kind === "failed"
+                                        (services.length === 0 ? (_jsx(EmptyState, { message: message })) : (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: "Stacks" }) }), _jsx(Box, { marginTop: 1, flexGrow: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex, isActive: !isSearching, maxVisibleItems: pageSize, width: mainPanelWidth, onLayout: handleListLayout }) })] }))), activeTab === "resources" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Resources ]" : "┌─ Resources ─" }) }), selectedStackData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: theme.muted, children: ["Stack: ", selectedStackData.stack.name] }), _jsxs(Box, { marginTop: 1, flexDirection: "column", children: [_jsx(ResourceTable, { resources: selectedStackData.metadata.resources, maxWidth: terminalWidth - (showSidebar ? 50 : 10) }), _jsx(ServiceIssues, { resources: selectedStackData.metadata.resources })] })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.muted, children: "Select a stack to view resources" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex, isActive: !isSearching, maxVisibleItems: pageSize, width: mainPanelWidth, onLayout: handleListLayout }) })] }))] })), activeTab === "files" && (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Autogenerated Files ]" : "┌─ Autogenerated Files ─" }) }), selectedServiceData ? (_jsxs(_Fragment, { children: [_jsxs(Text, { color: theme.muted, children: ["Service: ", selectedServiceData.service.name] }), _jsx(Box, { marginTop: 1, children: _jsx(FileTree, { nodes: fileTreeNodes, selectedPath: selectedFile || undefined }) })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.muted, children: "Select a service to view files" }), _jsx(Box, { marginTop: 1, children: _jsx(ResourceSelectInput, { items: items, onSelect: handleSelect, highlightedIndex: highlightedIndex, isActive: !isSearching, maxVisibleItems: pageSize, width: mainPanelWidth, onLayout: handleListLayout }) })] }))] })), activeTab === "events" && (_jsxs(Box, { flexDirection: "column", flexGrow: 1, children: [_jsx(Box, { marginBottom: 1, children: _jsx(Text, { bold: true, color: theme.muted, children: theme.ascii ? "[ Event Timeline ]" : "┌─ Event Timeline ─" }) }), (eventLoadState === "idle" || eventLoadState === "loading") && (_jsx(Text, { color: theme.muted, children: "Loading Tilt events..." })), eventLoadState === "unavailable" && (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: theme.warning, children: "Tilt is not running or its UI is unreachable." }), _jsx(Text, { color: theme.muted, children: "Start the stack with tdk up, then press [r] to retry." })] })), eventLoadState === "error" && (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: theme.error, children: "Could not load Tilt events." }), _jsx(Text, { color: theme.muted, children: formatEventDetails(eventLoadError ?? "Unknown Tilt error", mainPanelWidth) }), _jsx(Text, { color: theme.muted, children: "Press [r] to retry." })] })), eventLoadState === "ready" && (_jsxs(_Fragment, { children: [eventSnapshot && eventSnapshot.resources.length > 0 && (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsx(Text, { bold: true, color: theme.muted, children: "Current resources" }), eventSnapshot.resources.slice(0, 12).map((resource) => (_jsxs(Text, { color: theme.accent, children: [resource.name, ": ", formatResourceStatus(resource)] }, resource.name))), eventSnapshot.resources.length > 12 && (_jsx(Text, { color: theme.muted, children: "Showing first 12 resources" }))] })), _jsx(Text, { bold: true, color: theme.muted, children: "Recent events" }), eventSnapshot && eventSnapshot.events.length > 20 && (_jsx(Text, { color: theme.muted, children: "Showing first 20 events" })), eventSnapshot?.events.length ? (_jsx(Box, { flexDirection: "column", marginTop: 1, children: eventSnapshot.events.slice(0, 20).map((event) => (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [_jsxs(Text, { color: event.kind === "failed"
                                                                         ? theme.error
                                                                         : event.kind === "warning"
                                                                             ? theme.warning

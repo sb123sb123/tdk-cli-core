@@ -42,13 +42,32 @@ function asRecord(value: unknown): JsonRecord | null {
     : null;
 }
 
+// Tilt-controlled text is rendered in the terminal, so drop ANSI/OSC escape sequences and
+// other control characters (keeping tab/newline for later whitespace normalization).
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const ANSI_SEQUENCE = new RegExp(
+  `${ESC}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)?|[@-Z\\\\-_])`,
+  "g",
+);
+const CONTROL_CHARS = new RegExp("[\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]", "g");
+
+export function stripTerminalControls(value: string): string {
+  return value.replace(ANSI_SEQUENCE, "").replace(CONTROL_CHARS, "");
+}
+
 function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  if (typeof value !== "string") return undefined;
+  const cleaned = stripTerminalControls(value).trim();
+  return cleaned || undefined;
 }
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+    ? value.flatMap((item) => {
+        const cleaned = readString(item);
+        return cleaned ? [cleaned] : [];
+      })
     : [];
 }
 
@@ -104,6 +123,16 @@ export function parseTiltUiResourceList(value: unknown): TiltEventSnapshot {
         kind: "running",
         title: "Build in progress",
         occurredAt: readString(currentBuild.startTime),
+      });
+    }
+    const pendingSince = readString(status?.pendingBuildSince);
+    if (!currentBuild && (status?.queued === true || pendingSince)) {
+      events.push({
+        id: `${resourceName}:queued`,
+        resourceName,
+        kind: "warning",
+        title: "Update queued",
+        occurredAt: pendingSince,
       });
     }
     const lastDeployTime = readString(status?.lastDeployTime);

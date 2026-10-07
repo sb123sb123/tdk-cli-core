@@ -35,7 +35,7 @@ export const stackCommand = new Command("stack")
         requireProjectRoot();
         showCommandHeader("Stack Management");
         const discovery = createDiscoveryContext();
-        if (discovery.resources.length === 0) {
+        if (discovery.resources.length === 0 && options.resources === undefined) {
             console.log(chalk.yellow("No resources discovered. Make sure you're in a project with service.json files."));
             return;
         }

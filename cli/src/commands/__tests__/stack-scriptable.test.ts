@@ -75,6 +75,31 @@ describe("tdk stack command scriptability", () => {
     expect((error as Error).message).toContain(configPath);
   });
 
+  it("reports and skips malformed service.json files during discovery", () => {
+    const projectRoot = createProject();
+    addResource(projectRoot, "api");
+    const malformedPath = path.join(projectRoot, "services", "main", "broken", "service.json");
+    fs.mkdirSync(path.dirname(malformedPath), { recursive: true });
+    fs.writeFileSync(malformedPath, "{");
+
+    const result = runTdk(projectRoot, ["stack", "--list"]);
+    const output = result.stdout + result.stderr;
+
+    expect(result.status).toBe(0);
+    expect(output).toContain(`skipped ${malformedPath}: invalid JSON`);
+    expect(output).toContain("api");
+  });
+
+  it("validates explicit resource names when discovery finds no resources", () => {
+    const projectRoot = createProject();
+
+    const result = runTdk(projectRoot, ["stack", "backend", "--resources", "missing", "--yes"]);
+    const output = result.stdout + result.stderr;
+
+    expect(result.status).toBe(1);
+    expect(output).toContain('Resource "missing" not found');
+  });
+
   it("adds comma- and space-separated resources without prompting when --yes is set", () => {
     const projectRoot = createProject();
     const manifests = ["api", "worker", "web"].map((name) => addResource(projectRoot, name));

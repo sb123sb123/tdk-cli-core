@@ -90,13 +90,13 @@ describe("tdk logs --json", () => {
     expect(tilt.runTilt).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the resource-not-found factory for an unknown Tilt resource", async () => {
+  it("uses the shared unknown-service factory for an unknown Tilt resource", async () => {
     tilt.runTilt.mockResolvedValueOnce(resources("api", "web"));
-    const factory = vi.spyOn(errorFactories, "resourceNotFound");
+    const factory = vi.spyOn(errorFactories, "unknownServices");
     const { envelope, code } = await run("-s", "aip");
     expect(code).toBe(2);
     expect(envelope.errors[0].suggestions).toContain('Did you mean "api"?');
-    expect(factory).toHaveBeenCalledWith("aip", ["api", "web"]);
+    expect(factory).toHaveBeenCalledWith(["aip"], ["api", "web"]);
   });
 
   it("renders close resource suggestions in text errors", async () => {

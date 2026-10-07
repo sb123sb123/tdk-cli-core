@@ -59,11 +59,7 @@ export const logsCommand = new Command("logs")
             const unknown = services.filter((name) => known && !known.includes(name));
             if (unknown.length > 0) {
                 const error = errorFactories.unknownServices(unknown, known ?? []);
-                const suggestions = unknown.length === 1
-                    ? errorFactories
-                        .resourceNotFound(unknown[0], known ?? [])
-                        .suggestions.filter((suggestion) => suggestion.startsWith("Did you mean "))
-                    : error.suggestions;
+                const suggestions = error.suggestions;
                 fail("UNKNOWN_SERVICE", error.message, error.exitCode, suggestions);
             }
         }

@@ -23,7 +23,7 @@ describe("tdk ui keymap", () => {
   });
 
   it("formats navigation keys for Unicode and ASCII terminals", () => {
-    expect(formatUiKeyNames("list-navigation")).toBe("↑/↓ or j/k");
-    expect(formatUiKeyNames("list-navigation", true)).toBe("[UP/DOWN] or j/k");
+    expect(formatUiKeyNames("list-navigation")).toBe("↑/↓ or k/j");
+    expect(formatUiKeyNames("list-navigation", true)).toBe("UP/DOWN or k/j");
   });
 });

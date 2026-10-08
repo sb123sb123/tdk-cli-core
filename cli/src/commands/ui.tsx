@@ -1152,7 +1152,7 @@ function createHelpHint(
   if (activeTab === "events") {
     return [
       formatUiKeyHint("refresh", "Refresh events", ascii),
-      formatUiKeyHint("cycle-tabs", "Next", ascii),
+      formatUiKeyHint("cycle-tabs", "Tabs", ascii),
       formatUiKeyHint("help", "help", ascii),
       formatUiKeyHint("quit", "Quit", ascii),
     ].join(separator);
@@ -1161,7 +1161,7 @@ function createHelpHint(
     return ["View configurations", ...common].join(separator);
   }
   return [
-    formatUiKeyHint("cycle-tabs", "Next", ascii),
+    formatUiKeyHint("cycle-tabs", "Tabs", ascii),
     formatUiKeyHint("direct-tabs", "Tabs", ascii),
     ...common,
     formatUiKeyHint("quit", "Quit", ascii),

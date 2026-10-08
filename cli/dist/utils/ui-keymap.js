@@ -12,7 +12,7 @@ const uiKeymap = [
         keys: ["ArrowUp", "ArrowDown", "j", "k"],
         label: "Navigate list items",
         group: "Navigation",
-        display: { ascii: "[UP/DOWN] or j/k", unicode: "↑/↓ or j/k" },
+        display: { ascii: "UP/DOWN or k/j", unicode: "↑/↓ or k/j" },
     },
     {
         id: "first-last",

@@ -17,8 +17,8 @@ export declare const UI_KEYMAP: readonly [{
     readonly label: "Navigate list items";
     readonly group: "Navigation";
     readonly display: {
-        readonly ascii: "[UP/DOWN] or j/k";
-        readonly unicode: "↑/↓ or j/k";
+        readonly ascii: "UP/DOWN or k/j";
+        readonly unicode: "↑/↓ or k/j";
     };
 }, {
     readonly id: "first-last";

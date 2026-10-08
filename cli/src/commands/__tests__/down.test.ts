@@ -68,6 +68,51 @@ describe("tdk down", () => {
     }
   });
 
+  it("emits one machine-readable project-root error before prerequisites in JSON mode", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tdk-down-json-test-"));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit:1");
+    }) as never);
+    process.chdir(tempDir);
+
+    try {
+      await expect(
+        downCommand.parseAsync(["node", "tdk", "--json"], { from: "node" }),
+      ).rejects.toThrow("exit:1");
+
+      expect(log).toHaveBeenCalledTimes(1);
+      const report = JSON.parse(String(log.mock.calls[0]?.[0]));
+      expect(report).toMatchObject({
+        schemaVersion: 1,
+        data: null,
+        errors: [
+          {
+            code: "COMMAND_FAILED",
+            message: "Could not find project root (no .tdk/project.json found)",
+            suggestions: [
+              "Run this from within a TDK project",
+              "Run `tdk project --yes` to initialize a new project",
+            ],
+          },
+        ],
+      });
+      expect(error).toHaveBeenCalledWith(
+        "Could not find project root (no .tdk/project.json found)",
+      );
+      expect(runTiltMock).not.toHaveBeenCalled();
+      expect(getContainerRuntimeStatusMock).not.toHaveBeenCalled();
+      expect(isTiltAvailableMock).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tempDir, { recursive: true, force: true });
+      exit.mockRestore();
+      log.mockRestore();
+      error.mockRestore();
+    }
+  });
+
   it("prints the dry-run plan without building arguments or invoking Tilt", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tdk-down-dry-run-test-"));
     mkdirSync(join(tempDir, ".tdk"), { recursive: true });

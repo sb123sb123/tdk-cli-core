@@ -1,6 +1,12 @@
 import { Command } from "commander";
 import { STANDARD_PORTS } from "../utils/constants.js";
-import { errorFactories, runCommand, showErrorAndExit, TdkError } from "../utils/errors.js";
+import {
+  errorFactories,
+  requireProjectRoot,
+  runCommand,
+  showErrorAndExit,
+  TdkError,
+} from "../utils/errors.js";
 import { createMachineEnvelope } from "../utils/machine-output.js";
 import { findProjectRoot } from "../utils/paths.js";
 import {
@@ -84,16 +90,22 @@ export const logsCommand = new Command("logs")
     const tail = Number(options.tail);
     const services: string[] = options.service ?? [];
 
-    try {
-      secrets = envSecretValues(findProjectRoot() ?? process.cwd());
-    } catch (error) {
-      if (!(error instanceof EnvUnreadableError)) throw error;
-      fail("ENV_UNREADABLE", error.message, 1, [
-        "Fix the read permission on .env, or move it out of the project",
-      ]);
-    }
-
     const action = async (): Promise<void> => {
+      const projectRoot = options.json ? findProjectRoot() : requireProjectRoot();
+      if (!projectRoot) {
+        const error = errorFactories.notInProject();
+        return fail("NOT_IN_PROJECT", error.message, error.exitCode, error.suggestions);
+      }
+
+      try {
+        secrets = envSecretValues(projectRoot);
+      } catch (error) {
+        if (!(error instanceof EnvUnreadableError)) throw error;
+        fail("ENV_UNREADABLE", error.message, 1, [
+          "Fix the read permission on .env, or move it out of the project",
+        ]);
+      }
+
       if (!(await isTiltAvailable())) {
         fail("TILT_MISSING", "Tilt is not installed. Run: tdk doctor");
       }

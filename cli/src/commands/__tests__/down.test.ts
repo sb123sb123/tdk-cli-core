@@ -1,33 +1,37 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { runTiltMock } = vi.hoisted(() => ({ runTiltMock: vi.fn() }));
+const { runTiltMock, buildTiltDownArgsMock, getContainerRuntimeStatusMock, isTiltAvailableMock } =
+  vi.hoisted(() => ({
+    runTiltMock: vi.fn(),
+    buildTiltDownArgsMock: vi.fn(),
+    getContainerRuntimeStatusMock: vi.fn(() => "missing" as "running" | "unresponsive" | "missing"),
+    isTiltAvailableMock: vi.fn(async () => false),
+  }));
 const originalCwd = process.cwd();
 
-vi.mock("../../utils/errors.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../utils/errors.js")>();
-  return {
-    ...actual,
-    handleTiltFailure: vi.fn(),
-    withTiltCheck: (action: () => Promise<void>) => actual.runCommand(action),
-  };
-});
+vi.mock("../../utils/docker.js", () => ({
+  getContainerRuntimeStatus: getContainerRuntimeStatusMock,
+}));
 
-vi.mock("../../utils/tilt.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../utils/tilt.js")>();
-  return {
-    ...actual,
-    buildTiltDownArgs: vi.fn(actual.buildTiltDownArgs),
-    runTilt: runTiltMock,
-  };
-});
+vi.mock("../../utils/tilt.js", () => ({
+  buildTiltDownArgs: buildTiltDownArgsMock,
+  getTiltfilePath: vi.fn(),
+  isTiltAvailable: isTiltAvailableMock,
+  runTilt: runTiltMock,
+}));
 
 import { buildTiltDownArgs } from "../../utils/tilt.js";
 import { downCommand } from "../down.js";
 
 describe("tdk down", () => {
+  beforeEach(() => {
+    getContainerRuntimeStatusMock.mockReset().mockReturnValue("missing");
+    isTiltAvailableMock.mockReset().mockResolvedValue(false);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     runTiltMock.mockReset();
@@ -36,7 +40,7 @@ describe("tdk down", () => {
     }
   });
 
-  it("prints the shared project-root error and suggestions outside a project", async () => {
+  it("prints the shared project-root error before checking prerequisites outside a project", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tdk-down-test-"));
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const exit = vi.spyOn(process, "exit").mockImplementation((() => {
@@ -54,6 +58,8 @@ describe("tdk down", () => {
       expect(output).toContain("Run this from within a TDK project");
       expect(output).toContain("Run `tdk project --yes` to initialize a new project");
       expect(runTiltMock).not.toHaveBeenCalled();
+      expect(getContainerRuntimeStatusMock).not.toHaveBeenCalled();
+      expect(isTiltAvailableMock).not.toHaveBeenCalled();
     } finally {
       process.chdir(originalCwd);
       rmSync(tempDir, { recursive: true, force: true });
@@ -63,6 +69,12 @@ describe("tdk down", () => {
   });
 
   it("prints the dry-run plan without building arguments or invoking Tilt", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tdk-down-dry-run-test-"));
+    mkdirSync(join(tempDir, ".tdk"), { recursive: true });
+    writeFileSync(join(tempDir, ".tdk", "project.json"), "{}");
+    process.chdir(tempDir);
+    getContainerRuntimeStatusMock.mockReturnValue("running");
+    isTiltAvailableMock.mockResolvedValue(true);
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
     try {
@@ -73,7 +85,11 @@ describe("tdk down", () => {
       expect(output).toContain("Would run: tilt down");
       expect(buildTiltDownArgs).not.toHaveBeenCalled();
       expect(runTiltMock).not.toHaveBeenCalled();
+      expect(getContainerRuntimeStatusMock).toHaveBeenCalledTimes(1);
+      expect(isTiltAvailableMock).toHaveBeenCalledTimes(1);
     } finally {
+      process.chdir(originalCwd);
+      rmSync(tempDir, { recursive: true, force: true });
       log.mockRestore();
     }
   });

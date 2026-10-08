@@ -7,7 +7,7 @@ import {
   stopProjectTiltUp,
   waitForTiltUpExit,
 } from "../utils/down-cleanup.js";
-import { handleTiltFailure, withTiltCheck } from "../utils/errors.js";
+import { handleTiltFailure, requireProjectRoot, withTiltCheck } from "../utils/errors.js";
 import { createJsonEmitter } from "../utils/json-output.js";
 import { findProjectRoot } from "../utils/paths.js";
 import { discoverResources, discoverStacks } from "../utils/services.js";
@@ -57,6 +57,7 @@ export const downCommand = new Command("down")
   .option("--json", "Print one JSON object on stdout; implies quiet human output", false)
   .action(async (options) => {
     const emit = options.json ? createJsonEmitter("DOWN_FAILED", "tdk down") : undefined;
+    requireProjectRoot();
     await withTiltCheck(async () => {
       if (emit && options.dryRun) {
         emit({ ok: true, dryRun: true });

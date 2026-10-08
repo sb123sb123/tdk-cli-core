@@ -324,7 +324,7 @@ export async function upgradeViaNpm() {
         const errorCode = err && typeof err === "object" && "code" in err
             ? String(err.code ?? "")
             : "";
-        if (/EACCES|EPERM|permission denied/i.test(errorCode + " " + getErrorMessage(err) + " " + errorStderr)) {
+        if (/EACCES|EPERM|permission denied/i.test(`${errorCode} ${getErrorMessage(err)} ${errorStderr}`)) {
             console.log(chalk.gray("\nFor EACCES or EPERM, fix npm's global prefix or use the binary installer:"));
             console.log(chalk.cyan("   https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally/"));
             console.log(chalk.cyan(isWindows()

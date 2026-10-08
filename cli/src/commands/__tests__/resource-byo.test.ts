@@ -119,6 +119,35 @@ describe("bring-your-own resource type", () => {
     expect(discoverResourcesFromRoot(tempDir).map((resource) => resource.name)).toContain("widget");
   });
 
+  it("reports non-string route paths during service discovery", () => {
+    addResource("invalid-api", "backend", "shop", 4000);
+    addResource("invalid-frontend", "frontend", "shop", 5173);
+
+    const writeField = (name: string, field: string, value: unknown) => {
+      const path = join(tempDir, "services", "shop", name, "service.json");
+      const service = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+      service[field] = value;
+      writeFileSync(path, JSON.stringify(service, null, 2));
+    };
+    writeField("invalid-api", "apiPath", 42);
+    writeField("invalid-frontend", "basePath", null);
+    clearDiscoveryCache();
+    resetPrintedServiceWarnings();
+
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(discoverResourcesFromRoot(tempDir)).toEqual([]);
+      const messages = warning.mock.calls.flat().map(String).join("\n");
+      expect(messages).toContain("invalid-api");
+      expect(messages).toContain("apiPath: expected a string");
+      expect(messages).toContain("invalid-frontend");
+      expect(messages).toContain("basePath: expected a string");
+    } finally {
+      warning.mockRestore();
+      resetPrintedServiceWarnings();
+    }
+  });
+
   it("lists the resource through tdk resources and tdk up --dry-run", async () => {
     await createByo();
     const output: string[] = [];

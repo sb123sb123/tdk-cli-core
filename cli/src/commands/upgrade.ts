@@ -361,12 +361,18 @@ export async function upgradeViaNpm(): Promise<boolean> {
 
   try {
     execSync("npm install -g @tdk-landscape/tdk-cli-core@latest", {
-      stdio: "inherit",
+      stdio: ["inherit", "inherit", "pipe"],
       timeout: 120000,
     });
     spinner.succeed("Upgraded successfully via npm");
     return true;
   } catch (err: unknown) {
+    const errorStderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr?: unknown }).stderr ?? "")
+        : "";
+    if (errorStderr) process.stderr.write(errorStderr);
+
     logVerbose("npm upgrade error", err);
     spinner.fail(`npm upgrade failed: ${getErrorMessage(err)}`);
     console.log(chalk.yellow("\nTo retry manually, install the latest published npm release:"));
@@ -376,7 +382,9 @@ export async function upgradeViaNpm(): Promise<boolean> {
       err && typeof err === "object" && "code" in err
         ? String((err as { code?: unknown }).code ?? "")
         : "";
-    if (/EACCES|EPERM|permission denied/i.test(`${errorCode} ${getErrorMessage(err)}`)) {
+    if (
+      /EACCES|EPERM|permission denied/i.test(`${errorCode} ${getErrorMessage(err)} ${errorStderr}`)
+    ) {
       console.log(
         chalk.gray("\nFor EACCES or EPERM, fix npm's global prefix or use the binary installer:"),
       );

@@ -189,10 +189,14 @@ describe("upgradeViaBinary", () => {
 describe("package-manager upgrade failures", () => {
   it("does not switch to the GitHub default branch when npm install fails", async () => {
     execSyncMock.mockReset();
+    const npmStderr = "npm error code EACCES: permission denied\n";
     execSyncMock.mockImplementationOnce(() => {
-      throw new Error("EACCES: permission denied");
+      const error = new Error("Command failed: npm install -g @tdk-landscape/tdk-cli-core@latest");
+      Object.assign(error, { stderr: Buffer.from(npmStderr) });
+      throw error;
     });
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
     try {
       const ok = await upgradeViaNpm();
@@ -201,12 +205,17 @@ describe("package-manager upgrade failures", () => {
       expect(String(execSyncMock.mock.calls[0]?.[0])).toBe(
         "npm install -g @tdk-landscape/tdk-cli-core@latest",
       );
+      expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({
+        stdio: ["inherit", "inherit", "pipe"],
+      });
+      expect(stderr).toHaveBeenCalledWith(npmStderr);
       const output = log.mock.calls.flat().map(String).join("\n");
       expect(output).toContain("npm install -g @tdk-landscape/tdk-cli-core@latest");
       expect(output).toContain("docs.npmjs.com");
       expect(output).not.toContain("github:");
       expect(output).not.toContain("Upgraded successfully");
     } finally {
+      stderr.mockRestore();
       log.mockRestore();
     }
   });

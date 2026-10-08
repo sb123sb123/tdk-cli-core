@@ -166,6 +166,79 @@ describe("bring-your-own resource type", () => {
     }
   }, 15_000);
 
+  it("lists routable services without basePath and honors path overrides", async () => {
+    addResource("orders-api", "backend", "shop", 4000);
+    addResource("legacy-api", "backend", "shop", 4100);
+    addResource("storefront", "frontend", "shop", 5173);
+    addResource("docs-mcp", "mcp", "shop", 3000);
+    addResource("queue-worker", "worker", "shop", 6000);
+    addResource("other-api", "backend", "other", 4200);
+
+    const writeField = (name: string, field: string, value: string) => {
+      const path = join(tempDir, "services", "shop", name, "service.json");
+      const service = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+      service[field] = value;
+      writeFileSync(path, JSON.stringify(service, null, 2));
+    };
+    writeField("legacy-api", "apiPath", "/api/v2/legacy");
+    writeField("storefront", "basePath", "/web");
+    clearDiscoveryCache();
+
+    const output: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...parts: unknown[]) => {
+      output.push(parts.map(String).join(" "));
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit");
+    }) as never);
+
+    try {
+      await networksCommand.parseAsync(["node", "tdk", "--stack", "shop", "--json"], {
+        from: "node",
+      });
+      const report = JSON.parse(output.join("\n")) as {
+        data: { services: Array<{ name: string; stack: string; basePath: string; url: string }> };
+      };
+      const services = report.data.services;
+      expect(services.map((service) => service.name).sort()).toEqual([
+        "docs-mcp",
+        "legacy-api",
+        "orders-api",
+        "storefront",
+      ]);
+
+      const byName = new Map(services.map((service) => [service.name, service] as const));
+      expect(byName.get("orders-api")).toMatchObject({ stack: "shop", basePath: "/api/orders" });
+      expect(byName.get("orders-api")?.url).toMatch(/^http:\/\/api\..*\/api\/orders$/);
+      expect(byName.get("legacy-api")).toMatchObject({ stack: "shop", basePath: "/api/v2/legacy" });
+      expect(byName.get("legacy-api")?.url).toMatch(/^http:\/\/api\..*\/api\/v2\/legacy$/);
+      expect(byName.get("storefront")).toMatchObject({ stack: "shop", basePath: "/web" });
+      expect(byName.get("storefront")?.url).toMatch(/^http:\/\/app\..*\/web$/);
+      expect(byName.get("docs-mcp")?.basePath).toBe("/api/docs-mcp");
+
+      output.length = 0;
+      clearDiscoveryCache();
+      exit.mockClear();
+      await networksCommand
+        .parseAsync(["node", "tdk", "--stack", "shop", "--raw"], { from: "node" })
+        .catch(() => {});
+      const raw = output.join("\n");
+      expect(exit).toHaveBeenCalledWith(0);
+      expect(raw).toContain("/api/orders");
+      expect(raw).toContain("/api/v2/legacy");
+      expect(raw).toContain("/web");
+      expect(raw).toContain("/api/docs-mcp");
+      expect(raw).not.toContain("queue-worker");
+      expect(raw).not.toContain("other-api");
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+      exit.mockRestore();
+      clearDiscoveryCache();
+    }
+  });
+
   it("filters text resource output by type", async () => {
     await createByo();
     addResource("orders-api", "backend", "shop", 4000);

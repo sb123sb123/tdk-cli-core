@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { STANDARD_PORTS } from "../utils/constants.js";
-import { errorFactories, requireProjectRoot, runCommand, showErrorAndExit, TdkError, } from "../utils/errors.js";
+import { errorFactories, runCommand, showErrorAndExit, TdkError } from "../utils/errors.js";
 import { createMachineEnvelope } from "../utils/machine-output.js";
 import { findProjectRoot } from "../utils/paths.js";
 import { EnvUnreadableError, envSecretValues, redactSecrets, redactValue, } from "../utils/secret-redaction.js";
@@ -62,10 +62,11 @@ export const logsCommand = new Command("logs")
     const tail = Number(options.tail);
     const services = options.service ?? [];
     const action = async () => {
-        const projectRoot = options.json ? findProjectRoot() : requireProjectRoot();
+        const projectRoot = findProjectRoot();
         if (!projectRoot) {
+            // Same code `writeMachineError` gives this error in `down`, `stacks` and `resources`.
             const error = errorFactories.notInProject();
-            return fail("NOT_IN_PROJECT", error.message, error.exitCode, error.suggestions);
+            return fail("COMMAND_FAILED", error.message, error.exitCode, error.suggestions);
         }
         try {
             secrets = envSecretValues(projectRoot);

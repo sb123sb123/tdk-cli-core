@@ -91,7 +91,7 @@ describe("tdk logs --json", () => {
       data: null,
       errors: [
         {
-          code: "NOT_IN_PROJECT",
+          code: "COMMAND_FAILED",
           message: "Could not find project root (no .tdk/project.json found)",
           suggestions: [
             "Run this from within a TDK project",

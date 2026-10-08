@@ -169,6 +169,56 @@ describe("completing an existing .env", () => {
     expect(envValue(readEnv(), "JWT_SECRET")).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it("repairs empty generated keys in place and preserves the other file bytes", () => {
+    const original = [
+      "# keep this comment",
+      "TILT_ENV=   # cleared",
+      "DB_PASSWORD=keep-this-password",
+      "JWT_SECRET=",
+      "CUSTOM_VAR=unchanged",
+      "",
+    ].join("\r\n");
+    writeEnv(original);
+
+    const completed = envValidator.completeEnvFile(root);
+    const content = readEnv();
+    const secret = envValue(content, "JWT_SECRET");
+
+    expect(completed).toEqual(["TILT_ENV", "JWT_SECRET"]);
+    expect(secret).toMatch(/^[0-9a-f]{64}$/);
+    expect(content).toBe(
+      original
+        .replace("TILT_ENV=   # cleared", "TILT_ENV=dev # cleared")
+        .replace("JWT_SECRET=", `JWT_SECRET=${secret}`),
+    );
+  });
+
+  it("repairs an empty database password without changing the database URL", () => {
+    const original = [
+      "TILT_ENV=dev",
+      "DB_PASSWORD=",
+      "JWT_SECRET=existing-secret",
+      "DATABASE_URL=postgresql://postgres:configured@postgres:5432/app_dev",
+      "",
+    ].join("\r\n");
+    writeEnv(original);
+
+    const completed = envValidator.completeEnvFile(root);
+    const content = readEnv();
+    const password = envValue(content, "DB_PASSWORD");
+
+    expect(completed).toEqual(["DB_PASSWORD"]);
+    expect(password).toMatch(/^[0-9a-f]{32}$/);
+    expect(content).toBe(original.replace("DB_PASSWORD=", `DB_PASSWORD=${password}`));
+  });
+
+  it("does not change non-empty generated keys", () => {
+    const original = "TILT_ENV=prod\nDB_PASSWORD=keep-this-password\nJWT_SECRET=keep-this-secret\n";
+    writeEnv(original);
+
+    expect(envValidator.completeEnvFile(root)).toEqual([]);
+    expect(readEnv()).toBe(original);
+  });
   it("keeps ensureEnvFile reporting only a newly created file", () => {
     writeEnv("TILT_ENV=dev\nDB_PASSWORD=keep-this-password\n");
     expect(envValidator.ensureEnvFile(root)).toBe(false);

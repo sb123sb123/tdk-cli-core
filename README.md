@@ -104,7 +104,7 @@ curl -fsSL https://tdk-landscape.github.io/install.sh | sh
 - You do not want `service.json` manifests and generated local configuration.
 
 ## Troubleshooting
-Set `TDK_DEBUG=1` before running `tdk up` to include Starlark debug logs in Tilt output.
+Set `TDK_DEBUG=1` before running `tdk up --verbose` to include Starlark debug logs in Tilt output.
 
 ## Docs
 

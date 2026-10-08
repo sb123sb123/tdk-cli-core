@@ -1,7 +1,8 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as atomicWrite from "../atomic-write.js";
 import * as envValidator from "../env-validator.js";
 
 let root = "";
@@ -191,6 +192,22 @@ describe("completing an existing .env", () => {
         .replace("TILT_ENV=   # cleared", "TILT_ENV=dev # cleared")
         .replace("JWT_SECRET=", `JWT_SECRET=${secret}`),
     );
+  });
+
+  it("leaves the existing file intact when an atomic repair write fails", () => {
+    const original = envValidator.generateEnvFile().replace(/^TILT_ENV=.*$/m, "TILT_ENV=");
+    writeEnv(original);
+    const write = vi.spyOn(atomicWrite, "writeTextFileAtomic").mockImplementation(() => {
+      throw new Error("atomic replacement failed");
+    });
+
+    try {
+      expect(() => envValidator.completeEnvFile(root)).toThrow("atomic replacement failed");
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(readEnv()).toBe(original);
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("repairs an empty database password without changing the database URL", () => {

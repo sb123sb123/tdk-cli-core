@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { writeTextFileAtomic } from "./atomic-write.js";
 
 export interface EnvVariable {
   name: string;
@@ -289,7 +290,7 @@ export function completeEnvFile(projectRoot: string): string[] {
     updated += separator + addedLines.join("\n");
   }
 
-  writeFileSync(envPath, updated);
+  writeTextFileAtomic(envPath, updated);
   return toComplete.map((v) => v.name);
 }
 

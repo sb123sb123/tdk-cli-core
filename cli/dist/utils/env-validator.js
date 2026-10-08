@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { writeTextFileAtomic } from "./atomic-write.js";
 const REQUIRED_ENV_VARS = [
     {
         name: "VERDACCIO_URL_DOCKER",
@@ -250,7 +251,7 @@ export function completeEnvFile(projectRoot) {
         const separator = updated.endsWith("\n") || updated.endsWith("\r") ? "" : "\n";
         updated += separator + addedLines.join("\n");
     }
-    writeFileSync(envPath, updated);
+    writeTextFileAtomic(envPath, updated);
     return toComplete.map((v) => v.name);
 }
 export function ensureEnvFile(projectRoot) {
